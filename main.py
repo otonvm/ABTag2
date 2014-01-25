@@ -8,6 +8,8 @@ from argparse import ArgumentParser
 
 from PyQt5 import QtWidgets
 from PyQt5 import QtGui
+from PyQt5 import QtCore
+QtCore.QDir
 
 from config import Config
 from lib.util import Tools
@@ -52,7 +54,6 @@ class Wizard(QtWidgets.QWizard):
         QtWidgets.QShortcut(QtGui.QKeySequence("Ctrl+W"), self, self.close)
 
 
-
 class PathsPage(QtWidgets.QWizardPage):
     def __init__(self, config):
         super(PathsPage, self).__init__()
@@ -76,12 +77,14 @@ class PathsPage(QtWidgets.QWizardPage):
     def __setup_widgets(self):
         if self.config.input_folder is not None:
             self.path_line.setText(self.config.input_folder)
+            self._update_tree(self.config.input_folder)
         else:
             self.path_line.setPlaceholderText("Click Browse to choose path")
         debug("set path_line")
-        #TODO: validate
 
         self.path_browse_btn.clicked.connect(self._browse_path)
+        debug("set path_browse_btn")
+        return
 
     def __layout(self):
         grid = QtWidgets.QGridLayout()
@@ -90,17 +93,31 @@ class PathsPage(QtWidgets.QWizardPage):
         grid.addWidget(self.path_tree, 2, 1, 1, 2)  # row 2, col 1, rowspan 1, colspan 2
 
         self.setLayout(grid)
+        debug("added layout grid")
+        return
+
+    def _update_tree(self, path):
+        filesystem_model = QtWidgets.QFileSystemModel()
+        filesystem_model.setRootPath(path)
+        filesystem_model.setReadOnly(True)
+        debug("QFileSystemModel set to: %s", filesystem_model.rootPath())
+
+        self.path_tree.setModel(filesystem_model)
+        return
 
     def _browse_path(self):
-        file_dlg = QtWidgets.QFileDialog(self)
-        path = QtWidgets.QFileDialog.getExistingDirectory(file_dlg, "Choose folder", "",
-                                                          QtWidgets.QFileDialog.ShowDirsOnly)
-        debug("path from browse: %s", path)
+        file_dlg = QtWidgets.QFileDialog()
+        path = file_dlg.getExistingDirectory(self, "Choose folder", "/Users",
+                                             QtWidgets.QFileDialog.ShowDirsOnly)
 
         if path:
+            debug("path from QFileDialog: %s", path)
             self.config.input_folder = path
         else:
             warn("no path selected from QFileDialog")
+
+        self._update_tree(self)
+        return
 
     def nextId(self):
         return Wizard.URLPage
