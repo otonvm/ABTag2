@@ -4,6 +4,7 @@
 import os
 import sys
 import logging
+import platform
 from argparse import ArgumentParser
 
 from PyQt5 import QtWidgets
@@ -21,10 +22,10 @@ VERSION = 0.1
 logger = logging.getLogger(__name__)
 if DEBUG:
     logger.setLevel(logging.DEBUG)
-    log_format = "%(asctime)s - %(lineno)d: %(funcName)s, %(module)s, %(levelname)s: %(message)s"
+    log_format = "%(lineno)d: %(funcName)s, %(module)s.py, %(levelname)s: %(message)s"
 else:
     logger.setLevel(logging.ERROR)
-    log_format = "%(asctime)s - %(levelname)s: %(message)s"
+    log_format = "%(levelname)s: %(message)s"
 stream = logging.StreamHandler()
 fmt = logging.Formatter(log_format, datefmt="%d/%m-%H:%M")
 stream.setFormatter(fmt)
@@ -33,6 +34,35 @@ debug = logger.debug
 error = logger.error
 warn = logger.warning
 
+
+class Res:
+    """
+    This class creates a dict with keys to resources
+    that can be included in the gui.
+    It only needs to be instantiated once to populate the dict:
+    >>> Res()
+    The instance can be discarded.
+    After that various resources can be accesed like this:
+    >>> Res.icons["name"]
+    This returns a QPixmap object.
+    """
+    icons = {}
+
+    def __init__(self):
+        icons.load()
+
+        if platform.system() == "Darwin":
+            self.icons["folder"] = QtGui.QIcon(QtGui.QPixmap(":/mac/folder.png"))
+            self.icons["empty file"] = QtGui.QIcon(QtGui.QPixmap(":/mac/empty.png"))
+            self.icons["m4a file"] = QtGui.QIcon(QtGui.QPixmap(":/win/warning.png"))
+            self.icons["jpg file"] = QtGui.QIcon(QtGui.QPixmap(":/mac/jpeg.png"))
+            self.icons["png file"] = QtGui.QIcon(QtGui.QPixmap(":/win/warning.png"))
+        if platform.system() == "Windows":
+            self.icons["folder"] = QtGui.QIcon(QtGui.QPixmap(":/win/folder.png"))
+            self.icons["empty file"] = QtGui.QIcon(QtGui.QPixmap(":/win/empty.png"))
+            self.icons["m4a_file"] = QtGui.QIcon(QtGui.QPixmap(":/win/warning.png"))
+            self.icons["jpg file"] = QtGui.QIcon(QtGui.QPixmap(":/win/jpg.png"))
+            self.icons["png file"] = QtGui.QIcon(QtGui.QPixmap(":/win/png.png"))
 
 class Wizard(QtWidgets.QWizard):
     PathsPage = 0
@@ -92,14 +122,29 @@ class PathsPage(QtWidgets.QWizardPage):
         debug("added layout grid")
         return
 
+    def _update_gui(self):
+        self._update_path_line()
+        self._update_tree()
+
     def _update_path_line(self):
         if self.config.input_folder is not None:
             self.path_line.setText(self.config.input_folder)
-            self._update_tree()
         else:
             self.path_line.setPlaceholderText("Click Browse to choose path")
         debug("set path_line")
         return
+
+    @staticmethod
+    def _italic_font():
+        font = QtGui.QFont()
+        font.setItalic(True)
+        return font
+
+    @staticmethod
+    def _red_brush():
+        brush = QtGui.QBrush()
+        brush.setColor(QtGui.QColor("red"))
+        return brush
 
     def _update_tree(self):
         #reset tree:
@@ -120,37 +165,91 @@ class PathsPage(QtWidgets.QWizardPage):
         #create parent item:
         folder_name = os.path.basename(self.config.input_folder)
         top_folder = QtGui.QStandardItem(folder_name)
-        top_folder.setIcon(QtGui.QIcon(QtGui.QPixmap(":/mac/folder-mac.png")))
+        top_folder.setIcon(Res.icons["folder"])
         #append parent to root:
         root.appendRow(top_folder)
+        debug("set top row in tree model")
 
-        item = QtGui.QStandardItem("item")
+        files = Parse(self.config.input_folder)
+        files = files.all_files
+        debug("got all files from %s", self.config.input_folder)
+
+        if len(files) == 0:
+            debug("no valid files were found in %s", self.config.input_folder)
+            #create a red, italicized label:
+            name = QtGui.QStandardItem("None")
+            name.setFont(self._italic_font())
+            name.setForeground(self._red_brush())
+            #create a red, italicized description:
+            filetype = QtGui.QStandardItem("No valid files found")
+            filetype.setFont(self._italic_font())
+            filetype.setForeground(self._red_brush())
+            #append this to the tree:
+            top_folder.appendRow([name, filetype])
+
+        for file in files:
+            #go through each file in the selected folder
+            #create a name label from the item's basename:
+            name = QtGui.QStandardItem(os.path.basename(file))
+            name.setEditable(False)
+
+            #get file's extension and customize each extension
+            #with a different name and icon:
+            #TODO: automate the process, maybe with a dict?
+            #filetypes = {".m4a": ["MPEG-4 Audio", Res.icons["m4a file"]]
+            #             etc.}
+            ext = os.path.splitext(file)[1]
+            if ext == ".m4a":
+                filetype = QtGui.QStandardItem("MPEG-4 Audio")
+                name.setIcon(Res.icons["m4a file"])
+            elif ext == ".jpg" or ext == ".jpeg":
+                filetype = QtGui.QStandardItem("JPG Image")
+                name.setIcon(Res.icons["jpg file"])
+            elif ext == ".png":
+                filetype = QtGui.QStandardItem("PNG Image")
+                name.setIcon(Res.icons["png file"])
+            else:
+                filetype = QtGui.QStandardItem("Unknown")
+                name.setIcon(Res.icons["empty file"])
+            filetype.setTextAlignment(QtCore.Qt.AlignVCenter)
+            filetype.setEditable(False)
+
+            #append each file on the tree:
+            top_folder.appendRow([name, filetype])
+            debug("appended: %s, %s", name.text(), filetype.text())
+
         #item.setCheckable(True) #TODO: choose items
-        desc = QtGui.QStandardItem("desc")
-        desc.setTextAlignment(QtCore.Qt.AlignVCenter)
-        top_folder.appendRow([item, desc])
+        #set the tree model:
         self.path_tree.setModel(model)
+        debug("set tree model to tree")
+
+        #expand the tree:
+        self.path_tree.expandAll()
 
         return
 
     def _browse_path(self):
         if self.config.input_folder is not None:
+            #TODO: why is this not working?
             default_path = self.config.input_folder
         else:
             default_path = os.getcwd()
 
+        #create a file dialog that disabled files:
         file_dlg = QtWidgets.QFileDialog()
+        debug("creating QFileDialog()")
         path = file_dlg.getExistingDirectory(self, "Choose folder", default_path,
                                              QtWidgets.QFileDialog.ShowDirsOnly)
 
         if path:
-            debug("path from QFileDialog: %s", path)
+            debug("path from QFileDialog(): %s", path)
             self.config.input_folder = path
         else:
-            warn("no path selected from QFileDialog")
+            warn("no path selected from QFileDialog()")
 
-        self._update_tree()
-        self._update_path_line()
+        #update the path_line and the tree with new information:
+        #TODO: ignore if same path selected
+        self._update_gui()
         return
 
     def nextId(self):
@@ -262,6 +361,7 @@ def main():
 
     #start gui:
     app = QtWidgets.QApplication([])
+    Res()
     wizard = Wizard(config)
     wizard.show()
     app.exec_()

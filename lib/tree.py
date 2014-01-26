@@ -11,7 +11,7 @@ DEBUG = True
 logger = logging.getLogger(__name__)
 if DEBUG:
     logger.setLevel(logging.DEBUG)
-    log_format = "%(asctime)s - %(lineno)d: %(funcName)s, %(module)s, %(levelname)s: %(message)s"
+    log_format = "%(lineno)d: %(funcName)s, %(module)s.py, %(levelname)s: %(message)s"
     fmt = logging.Formatter(log_format, datefmt="%d/%m-%H:%M")
     stream = logging.StreamHandler()
     stream.setFormatter(fmt)
@@ -36,7 +36,11 @@ class Parse:
     """
 
     def __init__(self, folder):
-        self._folder = folder
+        if not isinstance(folder, str):
+            raise ValueError("folder must be a string")
+        else:
+            self._folder = folder
+    
         debug("_folder: %s", self._folder)
 
         self._file_list = None
@@ -46,25 +50,17 @@ class Parse:
         self.cover_extensions = [".png", ".jpg", ".jpeg"]
         self._xml = None
 
-        self.tools = Tools()
-
         self._parse()
-
-    def _get_folder(self):
-        if self.tools.path_exists(self._folder):
-            debug("%s exists", self._folder)
-
-            self._folder = self.tools.real_path(self._folder)
-            debug("real _folder: %s", self._folder)
-        else:
-            self._folder = None
-        return
 
     def _glob_folder(self):
         self._file_list = []
-        for file in os.listdir(self._folder):
-            self._file_list.append(os.path.join(self._folder, file))
+        try:
+            for file in os.listdir(self._folder):
+                self._file_list.append(os.path.join(self._folder, file))
             debug("_file_list: %s", self._file_list)
+
+        except FileNotFoundError:
+            raise FileNotFoundError("{} not found".format(self._folder)) from None
         return
 
     def _get_audio_files(self):
@@ -105,20 +101,10 @@ class Parse:
         debug("_xml: %s", self._xml)
 
     def _parse(self):
-        debug("inside _parse")
-        #backup original var:
-        _folder = self._folder
-
-        #get real path to folder (or not):
-        self._get_folder()
-
-        if self._folder is not None:
-            #get folder contents:
-            self._glob_folder()
-            #sort the list of files alphabetically:
-            self._file_list.sort()
-        else:
-            raise OSError("cannot parse {}".format(_folder))
+        #get folder contents:
+        self._glob_folder()
+        #sort the list of files alphabetically:
+        self._file_list.sort()
 
     @property
     def audio_files(self):
@@ -140,7 +126,9 @@ class Parse:
         all_files = []
         for file in self.audio_files:
             all_files.append(file)
-        all_files.append(self.cover)
-        all_files.append(self.xml)
+        if self.cover is not None:
+            all_files.append(self.cover)
+        if self.xml is not None:
+            all_files.append(self.xml)
         debug("all_files: %s", all_files)
         return all_files
