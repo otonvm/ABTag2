@@ -8,9 +8,12 @@ from argparse import ArgumentParser
 
 from PyQt5 import QtWidgets
 from PyQt5 import QtGui
+from PyQt5 import QtCore
+import icons
 
 from config import Config
 from lib.util import Tools
+from lib.tree import Parse
 
 DEBUG = True
 VERSION = 0.1
@@ -73,12 +76,7 @@ class PathsPage(QtWidgets.QWizardPage):
         self.__layout()
 
     def __setup_widgets(self):
-        if self.config.input_folder is not None:
-            self.path_line.setText(self.config.input_folder)
-            self._update_tree(self.config.input_folder)
-        else:
-            self.path_line.setPlaceholderText("Click Browse to choose path")
-        debug("set path_line")
+        self._update_path_line()
 
         self.path_browse_btn.clicked.connect(self._browse_path)
         debug("set path_browse_btn")
@@ -94,13 +92,45 @@ class PathsPage(QtWidgets.QWizardPage):
         debug("added layout grid")
         return
 
-    def _update_tree(self, path):
-        filesystem_model = QtWidgets.QFileSystemModel()
-        filesystem_model.setRootPath(path)
-        filesystem_model.setReadOnly(True)
-        debug("QFileSystemModel set to: %s", filesystem_model.rootPath())
+    def _update_path_line(self):
+        if self.config.input_folder is not None:
+            self.path_line.setText(self.config.input_folder)
+            self._update_tree()
+        else:
+            self.path_line.setPlaceholderText("Click Browse to choose path")
+        debug("set path_line")
+        return
 
-        self.path_tree.setModel(filesystem_model)
+    def _update_tree(self):
+        #reset tree:
+        self.path_tree.reset()
+
+        #tree customizations:
+        self.path_tree.setItemsExpandable(True)
+        self.path_tree.setIndentation(10)
+        self.path_tree.expanded.connect(lambda: self.path_tree.resizeColumnToContents(0))
+        self.path_tree.collapsed.connect(lambda: self.path_tree.resizeColumnToContents(0))
+
+        #create model:
+        model = QtGui.QStandardItemModel()
+        #add headers:
+        model.setHorizontalHeaderLabels(["Filename", "Type"])
+        #connect to top-level item:
+        root = model.invisibleRootItem()
+        #create parent item:
+        folder_name = os.path.basename(self.config.input_folder)
+        top_folder = QtGui.QStandardItem(folder_name)
+        top_folder.setIcon(QtGui.QIcon(QtGui.QPixmap(":/mac/folder-mac.png")))
+        #append parent to root:
+        root.appendRow(top_folder)
+
+        item = QtGui.QStandardItem("item")
+        #item.setCheckable(True) #TODO: choose items
+        desc = QtGui.QStandardItem("desc")
+        desc.setTextAlignment(QtCore.Qt.AlignVCenter)
+        top_folder.appendRow([item, desc])
+        self.path_tree.setModel(model)
+
         return
 
     def _browse_path(self):
@@ -119,7 +149,8 @@ class PathsPage(QtWidgets.QWizardPage):
         else:
             warn("no path selected from QFileDialog")
 
-        self._update_tree(self.config.input_folder)
+        self._update_tree()
+        self._update_path_line()
         return
 
     def nextId(self):
@@ -167,9 +198,9 @@ def parse_args():
                         help="Display verbose information. [default: %(default)s]")
 
     parser.add_argument(dest='input_folder', metavar='<folder path>', action='store',
-                             help="Input folder that contains all items.")
+                        nargs='?', help="Input folder that contains all items.")
 
-    parser.add_argument(dest='url', metavar='<url>', action='store',
+    parser.add_argument(dest='url', metavar='<url>', action='store', nargs='?',
                         help="url to audible page with metadata [default: None]")
 
     parser.add_argument('-c', '--cover', dest='input_cover', metavar='<cover image path>', action='store',
@@ -239,8 +270,7 @@ if __name__ == "__main__":
     import platform
 
     if platform.system() == "Darwin":
-        sys.argv.append("~/Downloads")
-        sys.argv.append("google.com")
+        sys.argv.append("test_ab")
     else:
         #sys.argv.append("--help")
         sys.argv.append(r"D:\Downloads\AAC Audiobooks")
