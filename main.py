@@ -8,8 +8,6 @@ from argparse import ArgumentParser
 
 from PyQt5 import QtWidgets
 from PyQt5 import QtGui
-from PyQt5 import QtCore
-QtCore.QDir
 
 from config import Config
 from lib.util import Tools
@@ -47,7 +45,7 @@ class Wizard(QtWidgets.QWizard):
         self.setModal(True)
 
         self.setPage(self.PathsPage, PathsPage(config))
-        self.setPage(self.URLPage, URLPage())
+        self.setPage(self.URLPage, URLPage(config))
         self.setStartId(self.PathsPage)
 
         QtWidgets.QShortcut(QtGui.QKeySequence("Ctrl+Q"), self, self.close)
@@ -106,8 +104,13 @@ class PathsPage(QtWidgets.QWizardPage):
         return
 
     def _browse_path(self):
+        if self.config.input_folder is not None:
+            default_path = self.config.input_folder
+        else:
+            default_path = os.getcwd()
+
         file_dlg = QtWidgets.QFileDialog()
-        path = file_dlg.getExistingDirectory(self, "Choose folder", "/Users",
+        path = file_dlg.getExistingDirectory(self, "Choose folder", default_path,
                                              QtWidgets.QFileDialog.ShowDirsOnly)
 
         if path:
@@ -116,7 +119,7 @@ class PathsPage(QtWidgets.QWizardPage):
         else:
             warn("no path selected from QFileDialog")
 
-        self._update_tree(self)
+        self._update_tree(self.config.input_folder)
         return
 
     def nextId(self):
@@ -124,10 +127,35 @@ class PathsPage(QtWidgets.QWizardPage):
 
 
 class URLPage(QtWidgets.QWizardPage):
-    def __init__(self, parent=None):
+    def __init__(self, config, parent=None):
         super(URLPage, self).__init__(parent)
 
-        self.setTitle("URLPage")
+        if not isinstance(config, Config):
+            raise ValueError("config must be an instance of Config class")
+        else:
+            self.config = config
+
+        self.setTitle("URL")
+        self.setSubTitle("Enter an url to the Audible page with metadata for this book:")
+
+        self.url_line = QtWidgets.QLineEdit()
+
+        self.__setup_widgets()
+        self.__layout()
+
+    def __setup_widgets(self):
+        if self.config.url is not None:
+            self.url_line.setText(self.config.url)
+        else:
+            self.url_line.setPlaceholderText("Enter url...")
+
+    def __layout(self):
+        grid = QtWidgets.QGridLayout()
+        grid.addWidget(self.url_line, 1, 1, 1, 2)  # row 1, col 1
+
+        self.setLayout(grid)
+        debug("added layout grid")
+        return
 
     def nextId(self):
         return Wizard.PathsPage
