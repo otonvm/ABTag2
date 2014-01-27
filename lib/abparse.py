@@ -62,6 +62,12 @@ class RegExException(Exception):
         self.msg = msg
 
 
+class FileError(Exception):
+    def __init__(self, msg):
+        super().__init__(msg)
+        self.msg = msg
+
+
 class Metadata:
     def __init__(self):
         self._url = None
@@ -85,6 +91,7 @@ class Metadata:
         self._copyright = None
 
     def _load_html(self, path):
+        """Load cached html from a pickle file"""
         if os.path.isfile(path):
             self._html = Tools.load_pickle(path)
             return
@@ -96,6 +103,7 @@ class Metadata:
                 return
 
     def _http_download(self, url, path=None):
+        """Download html page and save downloaded file to pickle"""
         try:
             self._html = urllib.request.urlopen(url).read()
 
@@ -118,10 +126,95 @@ class Metadata:
             else:
                 return True
 
+    def _local_file(self, file_path):
+        """Load html from local file"""
+        try:
+            with open(file_path, encoding='utf-8') as file:
+                self._soup = BeautifulSoup(file, "html5lib")
+                self._test_soup()
+                return
+        except FileExistsError:
+            raise FileError("requested file inaccessible or already open") from None
+        except OSError:
+            raise FileError("could not open requested file") from None
+
+    def _test_soup(self):
+        """Test if the soup has a valid structure"""
+        if self._soup.body is None or len(self._soup.body) == 0:
+            raise BS4Exception("cannot parse document structure") from None
+        return
+
+    def _create_soup(self):
+        """Create a soup object by parsing html data"""
+        if self._html is not None:
+            self._soup = BeautifulSoup(self._html, "html5lib")
+            self._test_soup()
+        return
+
+    def _set_title_raw(self):
+        """Extract raw title data from soup"""
+        self._title_raw = self._soup.find('h1', {'class': 'adbl-prod-h1-title'}).string.strip()
+
+    def _set_title(self):
+        """Parse raw title data and extract information"""
+        if self._title_raw is None:
+            self._set_title_raw()
+
+        title_regex = re.search(r"^([\w\s']+)", self._title_raw)
+
+        if title_regex:
+            self._title = title_regex.group(1)
+        else:
+            raise RegExException("could not extract title") from None
+
+    def _set_author_span(self):
+        self._author_span = self._soup.find('li', {'class': 'adbl-author-row'})
+        self._author_span = self._author_span.find('span', {'class': 'adbl-prod-author'})
+
+    def _parse_author_span(self):
+        if self._author_span is None:
+            self._set_author_span()
+
+        #get all text from div and create list (to remove \n etc.):
+        author_span_list = self._author_span.text.strip().split(',')
+        #strip unnecessary space from each string:
+        author_span_list = [s.strip() for s in author_span_list]
+
+        #join all data back into one string:
+        self._author = ', '.join(author_span_list)
+
+    def _set_author(self):
+        self._parse_author_span()
+
+    def _set_narrator_span(self):
+        self._narrator_span = self._soup.find('li', {'class': 'adbl-narrator-row'})
+        self._narrator_span = self._narrator_span.find('span', {'class': 'adbl-prod-author'})
+
+    def _parse_narrator_span(self):
+        if self._narrator_span is None:
+            self._set_narrator_span()
+
+        #get all text from div and create list (to remove \n etc.):
+        narrator_span_list = self._narrator_span.text.strip().split(',')
+        #strip unnecessary space from each string:
+        narrator_span_list = [s.strip() for s in narrator_span_list]
+
+        #join all data back into one string:
+        self._narrator = ', '.join(narrator_span_list)
+
+    def _set_narrator(self):
+        self._parse_narrator_span()
+
     @staticmethod
     def is_url_valid(url):
+        """Simple check if the url provided looks valid"""
         return url.startswith("http://www.audible.com/pd/") or \
             url.startswith("http://www.audible.co.uk/pd/")
+
+    def reset(self):
+        """Reset html data and soup"""
+        self._html = None
+        self._soup = None
 
     def http_page(self, url, path=None):
         """
@@ -136,15 +229,39 @@ class Metadata:
             if self._soup is None:
                 #a path was provided and loading from pickle worked:
                 if path is not None and self._load_html(path):
-                    return True
+                    return
                 else:
                     #no data available so it has to be downloaded
                     #if path is provided a backup will be done:
                     self._http_download(url, path)
                 #parse the html:
                 self._create_soup()
-                print("<----------------->")
 
         else:
-            raise lib_exceptions.URLException("{} provided is invalid. \
-                                           It has to be in the form of http://www.audible.com/pd/*")
+            raise URLException("{} provided is invalid. \
+                                It has to be in the form of http://www.audible.com/pd/*")
+
+    def local_html(self, html_file):
+        """Load html from local file"""
+        if not self._soup:
+            self._local_file(html_file)
+
+    @property
+    def title(self):
+        self._set_title()
+        return self._title
+
+    @property
+    def title_raw(self):
+        self._set_title()
+        return self._title_raw
+
+    @property
+    def authors(self):
+        self._set_author()
+        return self._author
+
+    @property
+    def narrators(self):
+        self._set_narrator()
+        return self._narrator
