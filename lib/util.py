@@ -79,7 +79,11 @@ class Tools:
 
     @staticmethod
     def load_pickle(path):
+        """Tries to load pickle data from path and returns
+        whatever was loaded.
+        If any exception is caught returns None."""
         try:
+            debug("trying to load pickle data")
             with open(path, mode='rb') as file:
                 debug("opened file %s for reading", path)
                 return pickle.load(file, encoding='utf-8')
@@ -90,6 +94,7 @@ class Tools:
     @staticmethod
     def dump_pickle(path, obj):
         try:
+            debug("trying to dump data to file")
             with open(path, mode='wb') as file:
                 debug("opened %s for writing", path)
                 pickle.dump(obj, file)

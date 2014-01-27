@@ -90,21 +90,32 @@ class Metadata:
         self._description = None
         self._copyright = None
 
+########    METHODS THAT DEAL WITH RAW DATA ####
     def _load_html(self, path):
         """Load cached html from a pickle file"""
         if os.path.isfile(path):
-            self._html = Tools.load_pickle(path)
-            return
+            debug("using %s for pickle data", path)
 
-        if os.path.isdir(path):
+            self._html = Tools.load_pickle(path)
+
+        elif os.path.isdir(path):
             html_dump = os.path.join(path, "page.pkl")
+            debug("using %s for pickle data", html_dump)
+
             if os.path.exists(html_dump):
                 self._html = Tools.load_pickle(html_dump)
-                return
+        else:
+            return False
+
+        if self._html is not None:
+            return True
+        else:
+            return False
 
     def _http_download(self, url, path=None):
         """Download html page and save downloaded file to pickle"""
         try:
+            debug("downloading from url: %s", url)
             self._html = urllib.request.urlopen(url).read()
 
         except urllib.error.HTTPError as err:
@@ -118,8 +129,8 @@ class Metadata:
             if path is not None:
                 if os.path.isdir(path):
                     html_dump = os.path.join(path, "page.pkl")
-                    Tools.dump_pickle(html_dump, self._html)
-                    return True
+                    debug("saving downloaded data to: %s", html_dump)
+                    return Tools.dump_pickle(html_dump, self._html)
 
                 else:
                     raise ValueError("path must be a folder") from None
@@ -138,6 +149,7 @@ class Metadata:
         except OSError:
             raise FileError("could not open requested file") from None
 
+########    METHODS THAT CREATE THE SOUP    ####
     def _test_soup(self):
         """Test if the soup has a valid structure"""
         if self._soup.body is None or len(self._soup.body) == 0:
@@ -151,9 +163,12 @@ class Metadata:
             self._test_soup()
         return
 
+########    METHODS THAT EXTRACT THE TITLE  ####
     def _set_title_raw(self):
         """Extract raw title data from soup"""
         self._title_raw = self._soup.find('h1', {'class': 'adbl-prod-h1-title'}).string.strip()
+        debug("_title_raw: %s", self._title_raw)
+        return
 
     def _set_title(self):
         """Parse raw title data and extract information"""
@@ -164,12 +179,16 @@ class Metadata:
 
         if title_regex:
             self._title = title_regex.group(1)
+            return
         else:
             raise RegExException("could not extract title") from None
 
+########    METHODS THAT EXTRACT AUTHORS    ####
     def _set_author_span(self):
         self._author_span = self._soup.find('li', {'class': 'adbl-author-row'})
         self._author_span = self._author_span.find('span', {'class': 'adbl-prod-author'})
+        debug("_author_span: %s", self._author_span)
+        return
 
     def _parse_author_span(self):
         if self._author_span is None:
@@ -182,13 +201,18 @@ class Metadata:
 
         #join all data back into one string:
         self._author = ', '.join(author_span_list)
+        return
 
     def _set_author(self):
         self._parse_author_span()
+        return
 
+########    METHODS THAT EXTRACT NARRATORS  ####
     def _set_narrator_span(self):
         self._narrator_span = self._soup.find('li', {'class': 'adbl-narrator-row'})
         self._narrator_span = self._narrator_span.find('span', {'class': 'adbl-prod-author'})
+        debug("_narrator_span: %s", self._narrator_span)
+        return
 
     def _parse_narrator_span(self):
         if self._narrator_span is None:
@@ -201,10 +225,145 @@ class Metadata:
 
         #join all data back into one string:
         self._narrator = ', '.join(narrator_span_list)
+        return
 
     def _set_narrator(self):
         self._parse_narrator_span()
+        return
 
+########    METHODS THAT EXTRAT SERIES DATA ####
+    def _set_series_tuple(self):
+        series = self._soup.find('div', {'class': 'adbl-series-link'})
+        debug("series: %s", self.series)
+
+        if series:
+            series_name = series.a.string.strip()
+
+            series_no = series.find('span', {'class': 'adbl-label'})
+            series_no = series_no.string.strip()
+            debug("series_no: %s", self.series_no)
+
+            series_no_match = re.search(r'^,\s\S+\s(\d+)$', series_no)
+
+            if series_no_match:
+                series_no = series_no_match.group(1)
+                self._series_tuple = (series_name, int(series_no))
+                return
+            else:
+                raise RegExException("could not determine series position number")
+
+        else:
+            self._series_tuple = None
+            return
+
+    def _set_series_tuple_from_title(self):
+        if self._title_raw is None:
+            self._set_title_raw()
+
+        exp = re.compile(r"^[\w\s]+:\s([\w\s']+),\sBook\s(\d)$")
+        match = exp.match(self._title_raw)
+
+        if match:
+            series_title = match.group(1)
+            series_no = int(match.group(2))
+
+            self._series_tuple = (series_title, series_no)
+            return
+        else:
+            self._series_tuple = None
+            return
+
+########    METHODS THAT EXTRAT RUNTIME DATA    ####
+    def _set_runtime(self):
+        runtime = self._soup.find('span', {'class': 'adbl-run-time'})
+        self._runtime = runtime.string.strip()
+        debug("_runtime: %s", self._runtime)
+        return
+
+    def _regex_runtime(self):
+        if self._runtime is None:
+            self._set_runtime()
+
+        #match string like:
+        #    23 hrs 45 mins
+        #    15 hrs
+        #returns an iterator of matches in sequence
+        exp = re.compile(r'^(\d+)|\s(\d+)')
+        match = re.findall(exp, self._runtime)
+
+        #filter through tuples for actual results producing a list of either one or two entries:
+        runtime_match_results = [l[0] or l[1] for l in match if l]
+        debug("runtime_match_results: %s", runtime_match_results)
+
+        if runtime_match_results:
+            if len(runtime_match_results) == 1:  # only hrs
+                hrs = int(runtime_match_results[0])
+
+                self._runtime_sec = hrs * 60 * 60
+                return
+            elif len(runtime_match_results) == 2:  # both hrs and mins
+                hrs = int(runtime_match_results[0])
+                mins = int(runtime_match_results[1])
+
+                self._runtime_sec = (hrs * 60 * 60) + (mins * 60)
+                return
+            else:
+                raise RegExException("could not convert runtime string into secconds")
+        else:
+            raise RegExException("could not parse runtime string")
+
+########    METHODS THAT EXTRACT RELEASE DATE DATA  ####
+    def _set_date_span(self):
+        self._date_span = self._soup.find('span', {"class": "adbl-date adbl-release-date"})
+        debug("_date_span: %s", self._date_span)
+        return
+
+    def _set_date(self):
+        if self._date_span is None:
+            self._set_date_span()
+
+        date_text = self._date_span.text.strip()
+        self._date_obj = time.strptime(date_text, "%m-%d-%y")
+        return
+
+########    METHODS THAT EXTRACT THE DESCRIPTION    ####
+    def _set_content_div(self):
+        self._content_div = self._soup.find('div', {"class": "adbl-content"})
+        debug("_content_div: %s", self._content_div)
+        return
+
+    def _parse_content_div(self):
+        if self._content_div is None:
+            self._set_content_div()
+
+        #get all text from div and create list:
+        content_div_list = self._content_div.text.strip().split('\n')
+        #strip unnecessary space from each string:
+        content_div_list = [s.strip() for s in content_div_list]
+        #filter out all empty strings:
+        content_div_list = [s for s in content_div_list if len(s) > 0]
+
+        self._content_div_list = content_div_list
+        debug("_content_div_list: %s", self._content_div_list)
+        return
+
+    def _set_description(self):
+        if self._content_div_list is None:
+            self._parse_content_div()
+        self._description = ''.join([s for s in self._content_div_list if s[0] != '©'])
+        return
+
+    def _set_copyright(self):
+        if self._content_div_list is None:
+            self._parse_content_div()
+        self._copyright = self._content_div_list[-1]
+        debug("_copyright: %s", self._copyright)
+
+        self._copyright = re.sub(r'\s\(P\)', '; Ⓟ', self._copyright)
+        self._copyright = re.sub(r';;', ';', self._copyright)
+        return
+
+########    PUBLIC METHODS  ####
     @staticmethod
     def is_url_valid(url):
         """Simple check if the url provided looks valid"""
@@ -215,6 +374,7 @@ class Metadata:
         """Reset html data and soup"""
         self._html = None
         self._soup = None
+        return
 
     def http_page(self, url, path=None):
         """
@@ -229,13 +389,19 @@ class Metadata:
             if self._soup is None:
                 #a path was provided and loading from pickle worked:
                 if path is not None and self._load_html(path):
-                    return
+                    pass
                 else:
                     #no data available so it has to be downloaded
                     #if path is provided a backup will be done:
-                    self._http_download(url, path)
+                    if self._http_download(url, path):
+                        pass
+                    else:
+                        raise HTTPException("could not load html data from {}".format(path))
                 #parse the html:
                 self._create_soup()
+            else:
+                #nothing to do
+                return
 
         else:
             raise URLException("{} provided is invalid. \
@@ -245,6 +411,7 @@ class Metadata:
         """Load html from local file"""
         if not self._soup:
             self._local_file(html_file)
+        return
 
     @property
     def title(self):
@@ -265,3 +432,40 @@ class Metadata:
     def narrators(self):
         self._set_narrator()
         return self._narrator
+
+    def series(self, try_title=False):
+        if try_title:
+            self._set_series_tuple_from_title()
+        else:
+            self._set_series_tuple()
+        return self._series_tuple
+
+    @property
+    def runtime_string(self):
+        self._set_runtime()
+        return self._runtime
+
+    @property
+    def runtime_sec(self):
+        self._regex_runtime()
+        return self._runtime_sec
+
+    @property
+    def date_obj(self):
+        self._set_date()
+        return self._date_obj
+
+    @property
+    def date_utc(self):
+        self._set_date()
+        return time.strftime("%Y-%m-%dT%H:%M:%SZ", self._date_obj)
+
+    @property
+    def description(self):
+        self._set_description()
+        return self._description
+
+    @property
+    def copyright(self):
+        self._set_copyright()
+        return self._copyright

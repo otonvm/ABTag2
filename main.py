@@ -284,6 +284,7 @@ class PathsPage(QtWidgets.QWizardPage):
     def _next_button_enabled(self, status):
         """This function sets the value of _complete, calls
         isComplete and emits a signal to the Wizard"""
+        debug("next button enabling: %s", status)
         self._complete = status
         self.isComplete()
         self.completeChanged.emit()
@@ -301,6 +302,7 @@ class PathsPage(QtWidgets.QWizardPage):
 class URLPage(QtWidgets.QWizardPage):
     def __init__(self, config, parent=None):
         super(URLPage, self).__init__(parent)
+        debug("instantiated URLPage class")
 
         if not isinstance(config, Config):
             raise ValueError("config must be an instance of Config class")
