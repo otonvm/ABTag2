@@ -60,9 +60,10 @@ class Res:
         if platform.system() == "Windows":
             self.icons["folder"] = QtGui.QIcon(QtGui.QPixmap(":/win/folder.png"))
             self.icons["empty file"] = QtGui.QIcon(QtGui.QPixmap(":/win/empty.png"))
-            self.icons["m4a_file"] = QtGui.QIcon(QtGui.QPixmap(":/win/warning.png"))
+            self.icons["m4a file"] = QtGui.QIcon(QtGui.QPixmap(":/win/warning.png"))
             self.icons["jpg file"] = QtGui.QIcon(QtGui.QPixmap(":/win/jpg.png"))
             self.icons["png file"] = QtGui.QIcon(QtGui.QPixmap(":/win/png.png"))
+
 
 class Wizard(QtWidgets.QWizard):
     PathsPage = 0
@@ -106,6 +107,7 @@ class PathsPage(QtWidgets.QWizardPage):
         self._layout()
 
         self._complete = False
+        return
 
     def _setup_widgets(self):
         self._update_path_line()
@@ -141,6 +143,7 @@ class PathsPage(QtWidgets.QWizardPage):
     def _update_gui(self):
         self._update_path_line()
         self._update_tree()
+        return
 
     def _update_path_line(self):
         debug("updating path_line")
@@ -244,7 +247,6 @@ class PathsPage(QtWidgets.QWizardPage):
 
         #expand the tree:
         self.path_tree.expandAll()
-
         return
 
     def _browse_path(self):
@@ -282,10 +284,10 @@ class PathsPage(QtWidgets.QWizardPage):
     def _next_button_enabled(self, status):
         """This function sets the value of _complete, calls
         isComplete and emits a signal to the Wizard"""
-
         self._complete = status
         self.isComplete()
         self.completeChanged.emit()
+        return
 
     def isComplete(self):
         """Reimplementation of QWizardPage.isComplete with
@@ -310,16 +312,16 @@ class URLPage(QtWidgets.QWizardPage):
 
         self.url_line = QtWidgets.QLineEdit()
 
-        self.__setup_widgets()
-        self.__layout()
+        self._setup_widgets()
+        self._layout()
 
-    def __setup_widgets(self):
+    def _setup_widgets(self):
         if self.config.url is not None:
             self.url_line.setText(self.config.url)
         else:
             self.url_line.setPlaceholderText("Enter url...")
 
-    def __layout(self):
+    def _layout(self):
         grid = QtWidgets.QGridLayout()
         grid.addWidget(self.url_line, 1, 1, 1, 2)  # row 1, col 1
 
@@ -414,8 +416,8 @@ if __name__ == "__main__":
         pass
     else:
         #sys.argv.append("--help")
-        sys.argv.append(r"D:\Downloads\AAC Audiobooks")
-        sys.argv.append("google.com")
+        #sys.argv.append(r"D:\Downloads\AAC Audiobooks")
+        #sys.argv.append("google.com")
         sys.argv.append("--cover")
         sys.argv.append(r"D:\Downloads\ImmPoster.jpg")
 
