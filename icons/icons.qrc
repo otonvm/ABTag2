@@ -1,0 +1,19 @@
+<RCC>
+  <qresource prefix="/">
+    <file>mac/empty.png</file>
+    <file>mac/folder.png</file>
+    <file>mac/gif.png</file>
+    <file>mac/jpeg.png</file>
+    <file>win/cancel.ico</file>
+    <file>win/delete.png</file>
+    <file>win/dll.ico</file>
+    <file>win/empty.png</file>
+    <file>win/folder.png</file>
+    <file>win/gif.png</file>
+    <file>win/jpg.png</file>
+    <file>win/png.png</file>
+    <file>win/refresh.ico</file>
+    <file>win/stop.ico</file>
+    <file>win/warning.png</file>
+  </qresource>
+</RCC>
