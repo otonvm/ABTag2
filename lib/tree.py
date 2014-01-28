@@ -123,6 +123,8 @@ class Parse:
 
     @property
     def all_files(self):
+        """Returns a list containing all valid files found
+        or None instead of an empty list."""
         all_files = []
         for file in self.audio_files:
             all_files.append(file)
@@ -131,4 +133,8 @@ class Parse:
         if self.xml is not None:
             all_files.append(self.xml)
         debug("all_files: %s", all_files)
-        return all_files
+
+        if len(all_files) == 0:
+            return None
+        else:
+            return all_files
