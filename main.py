@@ -103,17 +103,15 @@ class PathsPage(QtWidgets.QWizardPage):
         self._path_line = QtWidgets.QLineEdit()
         self.path_browse_btn = QtWidgets.QPushButton("&Browse")
         self._path_tree = QtWidgets.QTreeView()
-        self._model = QtGui.QStandardItemModel()
-        self._tree_root = None
-        self._top_folder = None
         self._files = None
+        self._complete = False
 
         self._setup_widgets()
         self._setup_layout()
-        self._get_files()
 
-        self._complete = False
-        #self._next_button_enabled(True)
+        self._get_files()
+        self._update_path_line()
+        self._update_tree()
 
     def _setup_widgets(self):
         self.path_browse_btn.clicked.connect(self._browse_path)
@@ -124,18 +122,10 @@ class PathsPage(QtWidgets.QWizardPage):
 
         #tree customizations:
         self._path_tree.setItemsExpandable(True)
-        #self._path_tree.setIndentation(10)
+        self._path_tree.setIndentation(10)
         self._path_tree.setUniformRowHeights(True)
         self._path_tree.expanded.connect(lambda: self._path_tree.resizeColumnToContents(0))
         self._path_tree.collapsed.connect(lambda: self._path_tree.resizeColumnToContents(0))
-
-        #add headers:
-        self._model.setHorizontalHeaderLabels(["Filename", "Type"])
-        #connect to top-level item:
-        self._tree_root = self._model.invisibleRootItem()
-
-        self._update_path_line()
-        self._update_tree()
         return
 
     def _setup_layout(self):
@@ -161,8 +151,8 @@ class PathsPage(QtWidgets.QWizardPage):
         return brush
 
     def _update_gui(self):
-        self._update_path_line()
         self._get_files()
+        self._update_path_line()
         self._update_tree()
         return
 
@@ -179,11 +169,6 @@ class PathsPage(QtWidgets.QWizardPage):
 
     def _get_files(self):
         if self.config.input_folder is not None:
-            #set a top_folder object for root:
-            folder_name = os.path.basename(self.config.input_folder)
-            self._top_folder = QtGui.QStandardItem(folder_name)
-            self._top_folder.setIcon(Res.icons["folder"])
-
             #get all files in the folder:
             files = Parse(self.config.input_folder)
             self._files = files.all_files
@@ -195,14 +180,33 @@ class PathsPage(QtWidgets.QWizardPage):
 
     def _update_tree(self):
         debug("updating _path_tree")
+
         #reset tree:
         self._path_tree.reset()
+        debug("_path_tree reset")
+
+        #create model:
+        model = QtGui.QStandardItemModel()
+        #add headers:
+        model.setHorizontalHeaderLabels(["Filename", "Type"])
+        debug("created QStandardItemModel model")
+
+        #connect to top-level item:
+        tree_root = model.invisibleRootItem()
+
         debug("tree reset")
 
         if self._files is not None:
+            #set a top_folder object for root:
+            folder_name = os.path.basename(self.config.input_folder)
+            top_folder = QtGui.QStandardItem(folder_name)
+            top_folder.setIcon(Res.icons["folder"])
+
             #append top folder parent to root:
-            self._tree_root.appendRow(self._top_folder)
-            debug("set top row in tree _model")
+            tree_root.appendRow(top_folder)
+            debug("set top row in tree model")
+            
+            self._path_tree.setModel(model)
 
             for file in self._files:
                 #go through each file in the selected folder
@@ -232,17 +236,17 @@ class PathsPage(QtWidgets.QWizardPage):
                 filetype.setEditable(False)
 
                 #append each file on the tree:
-                self._top_folder.appendRow([name, filetype])
+                top_folder.appendRow([name, filetype])
                 debug("appended: %s, %s", name.text(), filetype.text())
 
-                self._next_button_enabled(True)
+            self._next_button_enabled(True)
 
-        else:
+        elif self.config.input_folder is not None:
             debug("no files in _files")
 
             #set tree to an empty model:
-            self._path_tree.setModel(self._model)
-            debug("set _model to tree")
+            self._path_tree.setModel(model)
+            debug("set model to tree")
 
             #create a red, italicized label:
             name = QtGui.QStandardItem("None")
@@ -257,7 +261,7 @@ class PathsPage(QtWidgets.QWizardPage):
             filetype.setEditable(False)
 
             #append this to the tree:
-            self._tree_root.appendRow([name, filetype])
+            tree_root.appendRow([name, filetype])
             #disable next button:
             self._next_button_enabled(False)
 
@@ -297,11 +301,10 @@ class PathsPage(QtWidgets.QWizardPage):
         return Wizard.URLPage
 
     def _next_button_enabled(self, status):
-        """This function sets the value of _complete, calls
-        isComplete and emits a signal to the Wizard"""
+        """This function sets the value of _complete
+        and emits a signal to the Wizard"""
         debug("next button enabling: %s", status)
         self._complete = status
-        self.isComplete()
         self.completeChanged.emit()
         return
 
@@ -327,20 +330,45 @@ class URLPage(QtWidgets.QWizardPage):
         self.setTitle("URL")
         self.setSubTitle("Enter an url to the Audible page with metadata for this book:")
 
-        self.url_line = QtWidgets.QLineEdit()
+        self._url_line = QtWidgets.QLineEdit()
+        self._line = QtWidgets.QFrame()
+        self._reload_btn = QtWidgets.QPushButton()
+        self._label_title = QtWidgets.QLabel()
+        self._edit_title = QtWidgets.QLineEdit()
+        self._label_authors = QtWidgets.QLabel()
+        self._edit_authors = QtWidgets.QLineEdit()
+        self._label_narrators = QtWidgets.QLabel()
+        self._edit_narrators = QtWidgets.QLineEdit()
 
         self._setup_widgets()
         self._layout()
 
     def _setup_widgets(self):
         if self.config.url is not None:
-            self.url_line.setText(self.config.url)
+            self._url_line.setText(self.config.url)
         else:
-            self.url_line.setPlaceholderText("Enter url...")
+            self._url_line.setPlaceholderText("Enter url...")
+
+        self._line.setFrameShape(QtWidgets.QFrame.HLine)
+        self._line.setFrameShadow(QtWidgets.QFrame.Sunken)
+
+        self._reload_btn.setText("&Reload")
+
+        self._label_title.setText("Title:")
+        self._label_authors.setText("Authors:")
+        self._label_narrators.setText("Narrators:")
 
     def _layout(self):
         grid = QtWidgets.QGridLayout()
-        grid.addWidget(self.url_line, 1, 1, 1, 2)  # row 1, col 1
+        grid.addWidget(self._url_line, 1, 1, 1, 3)  # row, col, rowspan, colspan
+        grid.addWidget(self._line, 2, 1, 1, 3)
+        grid.addWidget(self._label_title, 3, 1, 1, 1)
+        grid.addWidget(self._edit_title, 3, 2, 1, 1)
+        grid.addWidget(self._reload_btn, 3, 3, 1, 1)
+        grid.addWidget(self._label_authors, 4, 1, 1, 1)
+        grid.addWidget(self._edit_authors, 4, 2, 1, 1)
+        grid.addWidget(self._label_narrators, 5, 1, 1, 1)
+        grid.addWidget(self._edit_narrators, 5, 2, 1, 1)
 
         self.setLayout(grid)
         debug("added layout grid")
