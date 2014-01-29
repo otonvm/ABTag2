@@ -360,45 +360,69 @@ class URLPage(QtWidgets.QWizardPage):
         self._line.setFrameShape(QtWidgets.QFrame.HLine)
         self._line.setFrameShadow(QtWidgets.QFrame.Sunken)
 
+        fixed_policy = QtWidgets.QSizePolicy()
+
         self._reload_btn.setText("&Reload")
+        self._reload_btn.setSizePolicy(fixed_policy)
 
         self._label_title.setText("Title:")
+        self._label_title.setSizePolicy(fixed_policy)
+
         self._label_authors.setText("Authors:")
+        self._label_authors.setSizePolicy(fixed_policy)
+
         self._label_narrators.setText("Narrators:")
+        self._label_narrators.setSizePolicy(fixed_policy)
+
         self._series_label.setText("Series:")
-        self._series_no_label.setText("Series N°:")
+        self._series_label.setSizePolicy(fixed_policy)
+
+        self._series_no_label.setText("N°:")
+        self._series_no_label.setSizePolicy(fixed_policy)
+
+        self._edit_series_no.setMaxLength(2)
+        self._edit_series_no.setMaximumWidth(40)
+
         self._description_label.setText("Description:")
+
         self._copyright_label.setText("Copyright:")
+        self._copyright_label.setSizePolicy(fixed_policy)
 
     def _layout(self):
-        grid = QtWidgets.QGridLayout()
-        grid.addWidget(self._url_line, 1, 1, 1, 4)  # row, col, rowspan, colspan
-        grid.addWidget(self._line, 2, 1, 1, 4)
+        layout = QtWidgets.QVBoxLayout()
+        grid_top = QtWidgets.QGridLayout()
+        grid_middle = QtWidgets.QGridLayout()
+        grid_botttom = QtWidgets.QGridLayout()
 
-        grid.addWidget(self._label_title, 3, 1, 1, 1)
-        grid.addWidget(self._edit_title, 3, 2, 1, 3)
+        grid_top.addWidget(self._url_line, 1, 1, 1, 5)  # row, col, rowspan, colspan
+        grid_top.addWidget(self._line, 2, 1, 1, 4)
+        grid_top.addWidget(self._reload_btn, 2, 5, 1, 1)
 
-        grid.addWidget(self._reload_btn, 3, 5, 1, 1)
+        grid_middle.addWidget(self._label_title, 1, 1, 1, 1)
+        grid_middle.addWidget(self._edit_title, 1, 2, 1, 3)
 
-        grid.addWidget(self._label_authors, 4, 1, 1, 1)
-        grid.addWidget(self._edit_authors, 4, 2, 1, 4)
+        grid_middle.addWidget(self._label_authors, 2, 1, 1, 1)
+        grid_middle.addWidget(self._edit_authors, 2, 2, 1, 3)
 
-        grid.addWidget(self._label_narrators, 5, 1, 1, 1)
-        grid.addWidget(self._edit_narrators, 5, 2, 1, 4)
+        grid_middle.addWidget(self._label_narrators, 3, 1, 1, 1)
+        grid_middle.addWidget(self._edit_narrators, 3, 2, 1, 3)
 
-        grid.addWidget(self._series_label, 6, 1, 1, 1)
-        grid.addWidget(self._edit_series, 6, 3, 1, 1)
+        grid_middle.addWidget(self._series_label, 4, 1, 1, 1)
+        grid_middle.addWidget(self._edit_series, 4, 2, 1, 1)
 
-        grid.addWidget(self._series_no_label, 6, 4, 1, 1)
-        grid.addWidget(self._edit_series_no, 6, 5, 1, 1)
+        grid_middle.addWidget(self._series_no_label, 4, 3, 1, 1)
+        grid_middle.addWidget(self._edit_series_no, 4, 4, 1, 1)
 
-        grid.addWidget(self._description_label, 7, 1, 1, 1)
-        grid.addWidget(self._edit_description, 8, 1, 1, 5)
+        grid_botttom.addWidget(self._description_label, 1, 1, 1, 1)
+        grid_botttom.addWidget(self._edit_description, 2, 1, 1, 4)
 
-        grid.addWidget(self._copyright_label, 9, 1, 1, 1)
-        grid.addWidget(self._edit_copyright, 9, 2, 1, 5)
+        grid_botttom.addWidget(self._copyright_label, 3, 1, 1, 1)
+        grid_botttom.addWidget(self._edit_copyright, 3, 2, 1, 3)
 
-        self.setLayout(grid)
+        layout.addLayout(grid_top)
+        layout.addLayout(grid_middle)
+        layout.addLayout(grid_botttom)
+        self.setLayout(layout)
         debug("added layout grid")
         return
 
