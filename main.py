@@ -334,22 +334,34 @@ class URLPage(QtWidgets.QWizardPage):
         self._main_layout.setSpacing(10)
 
         self._url_edit = QtWidgets.QLineEdit()
+        self.registerField("url*", self._url_edit)
         self._reload_button = QtWidgets.QPushButton()
         self._title_edit = QtWidgets.QLineEdit()
         self._authors_edit = QtWidgets.QLineEdit()
         self._narrators_edit = QtWidgets.QLineEdit()
         self._series_edit = QtWidgets.QLineEdit()
         self._series_no_edit = QtWidgets.QLineEdit()
-        debug("added all widgets")
+        self._series_no_edit.setMaximumWidth(40)
+        self._date_edit = QtWidgets.QLineEdit()
+        self._description_edit = QtWidgets.QPlainTextEdit()
+        self._copyright_edit = QtWidgets.QLineEdit()
+        debug("created all widgets")
 
         self._add_single_line_widget("URL", self._url_edit)
         self._add_line_and_reload_button_widget()
         self._add_single_line_widget("Title", self._title_edit)
         self._add_single_line_widget("Authors", self._authors_edit)
         self._add_single_line_widget("Narrators", self._narrators_edit)
-        self._add_series_widget()
+        self._add_series_date_widget()
+        self._add_description_widget()
+        self._add_single_line_widget("Copyright", self._copyright_edit)
 
         self.setLayout(self._main_layout)
+        debug("set main layout to window")
+
+        self._complete = False
+
+        self._update_url_box()
 
     @staticmethod
     def _label_font():
@@ -379,6 +391,8 @@ class URLPage(QtWidgets.QWizardPage):
         self._main_layout.addWidget(group_box)
 
     def _add_line_and_reload_button_widget(self):
+        debug("adding line and reload button")
+
         #customize (create) line:
         line = QtWidgets.QFrame()
         line.setFrameShape(QtWidgets.QFrame.HLine)
@@ -396,168 +410,123 @@ class URLPage(QtWidgets.QWizardPage):
 
         self._main_layout.addLayout(line_btn_layout)
 
-    def _add_series_widget(self):
-        debug("adding series wiget")
+    def _add_series_date_widget(self):
+        debug("adding series and date widget")
 
         size_policy_min = QtWidgets.QSizePolicy("Minimum")
 
-        series_layout = QtWidgets.QHBoxLayout()
+        #layout to contain all widgets:
+        series_date_layout = QtWidgets.QHBoxLayout()
 
+        #QGroupBox for series title text box:
         series_title_box = QtWidgets.QGroupBox()
         series_title_box.setTitle("Series")
         series_title_box.setFlat(True)
         series_title_box.setFont(self._label_font())
         series_title_box.setSizePolicy(size_policy_min)
 
+        #QHBoxLayout for series title text box:
         series_title_layout = QtWidgets.QHBoxLayout()
         series_title_layout.addWidget(self._series_edit)
-        #series_title_layout.setContentsMargins(0, 5, 0, 0)
+        series_title_layout.setContentsMargins(0, 5, 0, 0)
         series_title_layout.setSizeConstraint(QtWidgets.QLayout.SetMinAndMaxSize)
 
+        #add QGroupBox to QHBoxLayout:
         series_title_box.setLayout(series_title_layout)
 
-        series_layout.addWidget(series_title_box)
+        #add the complete widget to the main layout:
+        series_date_layout.addWidget(series_title_box)
 
+        #QGroupBox for series nº text box:
         series_no_box = QtWidgets.QGroupBox()
         series_no_box.setTitle("Nº")
         series_no_box.setFlat(True)
         series_no_box.setFont(self._label_font())
         series_no_box.setSizePolicy(size_policy_min)
 
+        #QHBoxLayout for series nº text box:
         series_no_layout = QtWidgets.QHBoxLayout()
         series_no_layout.addWidget(self._series_no_edit)
-        #series_no_layout.setContentsMargins(0, 5, 0, 0)
+        series_no_layout.setContentsMargins(0, 5, 0, 0)
         series_no_layout.setSizeConstraint(QtWidgets.QLayout.SetMinAndMaxSize)
 
+        #add QGroupBox to QHBoxLayout:
         series_no_box.setLayout(series_no_layout)
 
-        series_layout.addWidget(series_no_box)
+        #add the complete widget to the main layout:
+        series_date_layout.addWidget(series_no_box)
 
-        self._main_layout.addLayout(series_layout)
+        #QGroupBox for date text box:
+        date_box = QtWidgets.QGroupBox()
+        date_box.setTitle("Date")
+        date_box.setFlat(True)
+        date_box.setFont(self._label_font())
+        date_box.setSizePolicy(size_policy_min)
 
-"""
-class URLPage2(QtWidgets.QWizardPage):
-    def __init__(self, config, parent=None):
-        super(URLPage, self).__init__(parent)
-        debug("instantiated URLPage class")
+        #QHBoxLayout for date text box:
+        date_layout = QtWidgets.QHBoxLayout()
+        date_layout.addWidget(self._date_edit)
+        date_layout.setContentsMargins(0, 5, 0, 0)
+        date_layout.setSizeConstraint(QtWidgets.QLayout.SetMinAndMaxSize)
 
-        if not isinstance(config, Config):
-            raise ValueError("config must be an instance of Config class")
-        else:
-            self.config = config
+        #add QGroupBox to QHBoxLayout:
+        date_box.setLayout(date_layout)
 
-        self.setTitle("URL")
-        self.setSubTitle("Enter an url to the Audible page with metadata for this book:")
+        #add the complete widget to the main layout:
+        series_date_layout.addWidget(date_box)
 
-        self._url_line = QtWidgets.QLineEdit()
-        self._line = QtWidgets.QFrame()
-        self._reload_btn = QtWidgets.QPushButton()
-        self._label_title = QtWidgets.QLabel()
-        self._edit_title = QtWidgets.QLineEdit()
-        self._label_authors = QtWidgets.QLabel()
-        self._edit_authors = QtWidgets.QLineEdit()
-        self._label_narrators = QtWidgets.QLabel()
-        self._edit_narrators = QtWidgets.QLineEdit()
+        #add everything to the main window:
+        self._main_layout.addLayout(series_date_layout)
 
-        self._series_label = QtWidgets.QLabel()
-        self._edit_series = QtWidgets.QLineEdit()
-        self._series_no_label = QtWidgets.QLabel()
-        self._edit_series_no = QtWidgets.QLineEdit()
+    def _add_description_widget(self):
+        debug("adding description widget")
 
-        self._date_label = QtWidgets.QLabel()
-        self._edit_date = QtWidgets.QLineEdit()
-        self._description_label = QtWidgets.QLabel()
-        self._edit_description = QtWidgets.QPlainTextEdit()
-        self._copyright_label = QtWidgets.QLabel()
-        self._edit_copyright = QtWidgets.QLineEdit()
+        size_policy_min = QtWidgets.QSizePolicy("Minimum")
 
-        self._setup_widgets()
-        self._layout()
+        group_box = QtWidgets.QGroupBox()
+        group_box.setTitle("Description")
+        group_box.setFlat(True)
+        group_box.setFont(self._label_font())
+        group_box.setSizePolicy(size_policy_min)
 
-    def _setup_widgets(self):
+        group_box_layout = QtWidgets.QHBoxLayout()
+        group_box_layout.addWidget(self._description_edit)
+        group_box_layout.setContentsMargins(0, 5, 0, 0)
+        group_box_layout.setSizeConstraint(QtWidgets.QLayout.SetMaximumSize)
+
+        group_box.setLayout(group_box_layout)
+
+        self._main_layout.addWidget(group_box)
+
+    def _update_url_box(self):
         if self.config.url is not None:
-            self._url_line.setText(self.config.url)
+            self._url_edit.setText(self.config.url)
+            self._check_url()
         else:
-            self._url_line.setPlaceholderText("Enter url...")
+            self._url_edit.setPlaceholderText("Enter url and press Return or click Reload...")
 
-        self._line.setFrameShape(QtWidgets.QFrame.HLine)
-        self._line.setFrameShadow(QtWidgets.QFrame.Sunken)
+    def _check_url(self):
 
-        fixed_policy = QtWidgets.QSizePolicy()
-
-        self._reload_btn.setText("&Reload")
-        self._reload_btn.setSizePolicy(fixed_policy)
-
-        self._label_title.setText("Title:")
-        self._label_title.setSizePolicy(fixed_policy)
-
-        self._label_authors.setText("Authors:")
-        self._label_authors.setSizePolicy(fixed_policy)
-
-        self._label_narrators.setText("Narrators:")
-        self._label_narrators.setSizePolicy(fixed_policy)
-
-        self._series_label.setText("Series:")
-        self._series_label.setSizePolicy(fixed_policy)
-
-        self._series_no_label.setText("N°:")
-        self._series_no_label.setSizePolicy(fixed_policy)
-
-        self._edit_series_no.setMaxLength(2)
-        self._edit_series_no.setMaximumWidth(40)
-
-        self._date_label.setText("Date:")
-        self._date_label.setSizePolicy(fixed_policy)
-
-        self._description_label.setText("Description:")
-
-        self._copyright_label.setText("Copyright:")
-        self._copyright_label.setSizePolicy(fixed_policy)
-
-    def _layout(self):
-        layout = QtWidgets.QVBoxLayout()
-        grid_top = QtWidgets.QGridLayout()
-        grid_middle = QtWidgets.QGridLayout()
-        grid_botttom = QtWidgets.QGridLayout()
-
-        grid_top.addWidget(self._url_line, 1, 1, 1, 5)  # row, col, rowspan, colspan
-        grid_top.addWidget(self._line, 2, 1, 1, 4)
-        grid_top.addWidget(self._reload_btn, 2, 5, 1, 1)
-
-        grid_middle.addWidget(self._label_title, 1, 1, 1, 1)
-        grid_middle.addWidget(self._edit_title, 1, 2, 1, 3)
-
-        grid_middle.addWidget(self._label_authors, 2, 1, 1, 1)
-        grid_middle.addWidget(self._edit_authors, 2, 2, 1, 3)
-
-        grid_middle.addWidget(self._label_narrators, 3, 1, 1, 1)
-        grid_middle.addWidget(self._edit_narrators, 3, 2, 1, 3)
-
-        grid_middle.addWidget(self._series_label, 4, 1, 1, 1)
-        grid_middle.addWidget(self._edit_series, 4, 2, 1, 1)
-
-        grid_middle.addWidget(self._series_no_label, 4, 3, 1, 1)
-        grid_middle.addWidget(self._edit_series_no, 4, 4, 1, 1)
-
-        grid_middle.addWidget(self._date_label, 5, 1, 1, 1)
-        grid_middle.addWidget(self._edit_date, 5, 2, 1, 1)
-
-        grid_botttom.addWidget(self._description_label, 1, 1, 1, 1)
-        grid_botttom.addWidget(self._edit_description, 2, 1, 1, 4)
-
-        grid_botttom.addWidget(self._copyright_label, 3, 1, 1, 1)
-        grid_botttom.addWidget(self._edit_copyright, 3, 2, 1, 3)
-
-        layout.addLayout(grid_top)
-        layout.addLayout(grid_middle)
-        layout.addLayout(grid_botttom)
-        self.setLayout(layout)
-        debug("added layout grid")
+    def _next_button_enabled(self, status):
+        """This function sets the value of _complete
+        and emits a signal to the Wizard"""
+        debug("next button enabling: %s", status)
+        self._complete = status
+        self.completeChanged.emit()
         return
+
+    def isComplete(self):
+        """Reimplementation of QWizardPage.isComplete with
+        a check of a class variable"""
+        if self._complete:
+            return True
+        else:
+            return False
+
 
     def nextId(self):
         return Wizard.PathsPage
-"""
+
 
 def parse_args():
     parser = ArgumentParser()
@@ -643,10 +612,10 @@ if __name__ == "__main__":
     else:
         #sys.argv.append("--help")
         #sys.argv.append(r"D:\Downloads\AAC Audiobooks")
-        #sys.argv.append("google.com")
         #sys.argv.append("--cover")
         #sys.argv.append(r"D:\Downloads\ImmPoster.jpg")
         sys.argv.append("test_ab")
+        sys.argv.append("google.com")
         pass
 
     sys.exit(main())
