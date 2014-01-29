@@ -241,7 +241,7 @@ class Metadata:
 
             series_no = series.find('span', {'class': 'adbl-label'})
             series_no = series_no.string.strip()
-            debug("series_no: %s", self.series_no)
+            debug("series_no: %s", series_no)
 
             series_no_match = re.search(r'^,\s\S+\s(\d+)$', series_no)
 

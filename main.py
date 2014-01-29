@@ -15,6 +15,7 @@ import icons
 from config import Config
 from lib.util import Tools
 from lib.tree import Parse
+from lib.abparse import Metadata
 
 DEBUG = True
 VERSION = 0.1
@@ -327,26 +328,35 @@ class URLPage(QtWidgets.QWizardPage):
         else:
             self.config = config
 
+        self.metadata = Metadata()
+
         self.setTitle("URL")
         self.setSubTitle("Enter an audible url that points to the metadata of your book.")
 
+        #ad widgets:
         self._main_layout = QtWidgets.QVBoxLayout()
         self._main_layout.setSpacing(10)
 
         self._url_edit = QtWidgets.QLineEdit()
         self.registerField("url*", self._url_edit)
+
         self._reload_button = QtWidgets.QPushButton()
+        self._reload_button.clicked.connect(self._update_url_box)
+
         self._title_edit = QtWidgets.QLineEdit()
         self._authors_edit = QtWidgets.QLineEdit()
         self._narrators_edit = QtWidgets.QLineEdit()
         self._series_edit = QtWidgets.QLineEdit()
+
         self._series_no_edit = QtWidgets.QLineEdit()
         self._series_no_edit.setMaximumWidth(40)
+
         self._date_edit = QtWidgets.QLineEdit()
         self._description_edit = QtWidgets.QPlainTextEdit()
         self._copyright_edit = QtWidgets.QLineEdit()
         debug("created all widgets")
 
+        #setup widgets and layout:
         self._add_single_line_widget("URL", self._url_edit)
         self._add_line_and_reload_button_widget()
         self._add_single_line_widget("Title", self._title_edit)
@@ -359,7 +369,16 @@ class URLPage(QtWidgets.QWizardPage):
         self.setLayout(self._main_layout)
         debug("set main layout to window")
 
+        #set class members:
         self._complete = False
+        self._title = False
+        self._authors = False
+        self._narrators = False
+        self._series = False
+        self._series_no = False
+        self._date = False
+        self._description = False
+        self._copyright = False
 
         self._update_url_box()
 
@@ -369,6 +388,18 @@ class URLPage(QtWidgets.QWizardPage):
         label_font.setPixelSize(10)
         label_font.setBold(True)
         return label_font
+
+    @staticmethod
+    def _italic_font():
+        font = QtGui.QFont()
+        font.setItalic(True)
+        return font
+
+    @staticmethod
+    def _red_brush():
+        brush = QtGui.QBrush()
+        brush.setColor(QtGui.QColor("red"))
+        return brush
 
     def _add_single_line_widget(self, label, widget):
         debug("adding widget: %s, label: %s", widget, label)
@@ -499,13 +530,48 @@ class URLPage(QtWidgets.QWizardPage):
         self._main_layout.addWidget(group_box)
 
     def _update_url_box(self):
+        debug("updating url box")
         if self.config.url is not None:
+            debug("current url: %s", self.config.url)
+
             self._url_edit.setText(self.config.url)
-            self._check_url()
+            if self.metadata.is_url_valid(self.config.url):
+                debug("url is valid")
+                self._load_metadata()
+                self._update_gui()
+                self._next_button_enabled(True)
+            else:
+                debug("url is invalid")
+                self._url_edit.setText("This url is not valid!")
+                self._url_edit.set
+                self._next_button_enabled(False)
         else:
             self._url_edit.setPlaceholderText("Enter url and press Return or click Reload...")
+        return
 
-    def _check_url(self):
+    def _load_metadata(self):
+        debug("loading metadata from url")
+        self.metadata.http_page(self.config.url)
+        self._title = self.metadata.title
+        self._authors = self.metadata.authors
+        self._narrators = self.metadata.narrators
+        (self._series, self._series_no) = self.metadata.series()
+        self._date = self.metadata.date_utc
+        self._description = self.metadata.description
+        self._copyright = self.metadata.copyright
+        return
+
+    def _update_gui(self):
+        debug("updating gui with metadata")
+        self._title_edit.setText(self._title)
+        self._authors_edit.setText(self._authors)
+        self._narrators_edit.setText(self._narrators)
+        self._series_edit.setText(self._series)
+        self._series_no_edit.setText(str(self._series_no))
+        self._date_edit.setText(self._date)
+        self._description_edit.setPlainText(self._description)
+        self._copyright_edit.setText(self._copyright)
+        return
 
     def _next_button_enabled(self, status):
         """This function sets the value of _complete
@@ -522,7 +588,6 @@ class URLPage(QtWidgets.QWizardPage):
             return True
         else:
             return False
-
 
     def nextId(self):
         return Wizard.PathsPage
@@ -608,6 +673,7 @@ if __name__ == "__main__":
 
     if platform.system() == "Darwin":
         sys.argv.append("test_ab")
+        sys.argv.append("http://www.audible.com/pd/Sci-Fi-Fantasy/On-Basilisk-Station-Audiobook/B002V1BOWY/ref=a_search_c4_1_1_srTtl?qid=1391030110&sr=1-1")
         pass
     else:
         #sys.argv.append("--help")
@@ -615,7 +681,7 @@ if __name__ == "__main__":
         #sys.argv.append("--cover")
         #sys.argv.append(r"D:\Downloads\ImmPoster.jpg")
         sys.argv.append("test_ab")
-        sys.argv.append("google.com")
+        sys.argv.append("http://www.audible.com/pd/Sci-Fi-Fantasy/On-Basilisk-Station-Audiobook/B002V1BOWY/ref=a_search_c4_1_1_srTtl?qid=1391030110&sr=1-1")
         pass
 
     sys.exit(main())
