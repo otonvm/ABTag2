@@ -205,7 +205,7 @@ class PathsPage(QtWidgets.QWizardPage):
             #append top folder parent to root:
             tree_root.appendRow(top_folder)
             debug("set top row in tree model")
-            
+
             self._path_tree.setModel(model)
 
             for file in self._files:
@@ -339,6 +339,14 @@ class URLPage(QtWidgets.QWizardPage):
         self._edit_authors = QtWidgets.QLineEdit()
         self._label_narrators = QtWidgets.QLabel()
         self._edit_narrators = QtWidgets.QLineEdit()
+        self._series_label = QtWidgets.QLabel()
+        self._edit_series = QtWidgets.QLineEdit()
+        self._series_no_label = QtWidgets.QLabel()
+        self._edit_series_no = QtWidgets.QLineEdit()
+        self._description_label = QtWidgets.QLabel()
+        self._edit_description = QtWidgets.QPlainTextEdit()
+        self._copyright_label = QtWidgets.QLabel()
+        self._edit_copyright = QtWidgets.QLineEdit()
 
         self._setup_widgets()
         self._layout()
@@ -357,18 +365,38 @@ class URLPage(QtWidgets.QWizardPage):
         self._label_title.setText("Title:")
         self._label_authors.setText("Authors:")
         self._label_narrators.setText("Narrators:")
+        self._series_label.setText("Series:")
+        self._series_no_label.setText("Series N°:")
+        self._description_label.setText("Description:")
+        self._copyright_label.setText("Copyright:")
 
     def _layout(self):
         grid = QtWidgets.QGridLayout()
-        grid.addWidget(self._url_line, 1, 1, 1, 3)  # row, col, rowspan, colspan
-        grid.addWidget(self._line, 2, 1, 1, 3)
+        grid.addWidget(self._url_line, 1, 1, 1, 4)  # row, col, rowspan, colspan
+        grid.addWidget(self._line, 2, 1, 1, 4)
+
         grid.addWidget(self._label_title, 3, 1, 1, 1)
-        grid.addWidget(self._edit_title, 3, 2, 1, 1)
-        grid.addWidget(self._reload_btn, 3, 3, 1, 1)
+        grid.addWidget(self._edit_title, 3, 2, 1, 3)
+
+        grid.addWidget(self._reload_btn, 3, 5, 1, 1)
+
         grid.addWidget(self._label_authors, 4, 1, 1, 1)
-        grid.addWidget(self._edit_authors, 4, 2, 1, 1)
+        grid.addWidget(self._edit_authors, 4, 2, 1, 4)
+
         grid.addWidget(self._label_narrators, 5, 1, 1, 1)
-        grid.addWidget(self._edit_narrators, 5, 2, 1, 1)
+        grid.addWidget(self._edit_narrators, 5, 2, 1, 4)
+
+        grid.addWidget(self._series_label, 6, 1, 1, 1)
+        grid.addWidget(self._edit_series, 6, 3, 1, 1)
+
+        grid.addWidget(self._series_no_label, 6, 4, 1, 1)
+        grid.addWidget(self._edit_series_no, 6, 5, 1, 1)
+
+        grid.addWidget(self._description_label, 7, 1, 1, 1)
+        grid.addWidget(self._edit_description, 8, 1, 1, 5)
+
+        grid.addWidget(self._copyright_label, 9, 1, 1, 1)
+        grid.addWidget(self._edit_copyright, 9, 2, 1, 5)
 
         self.setLayout(grid)
         debug("added layout grid")
@@ -461,10 +489,11 @@ if __name__ == "__main__":
         pass
     else:
         #sys.argv.append("--help")
-        sys.argv.append(r"D:\Downloads\AAC Audiobooks")
-        sys.argv.append("google.com")
-        sys.argv.append("--cover")
-        sys.argv.append(r"D:\Downloads\ImmPoster.jpg")
+        #sys.argv.append(r"D:\Downloads\AAC Audiobooks")
+        #sys.argv.append("google.com")
+        #sys.argv.append("--cover")
+        #sys.argv.append(r"D:\Downloads\ImmPoster.jpg")
+        sys.argv.append("test_ab")
         pass
 
     sys.exit(main())
