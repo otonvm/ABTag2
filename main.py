@@ -328,6 +328,125 @@ class URLPage(QtWidgets.QWizardPage):
             self.config = config
 
         self.setTitle("URL")
+        self.setSubTitle("Enter an audible url that points to the metadata of your book.")
+
+        self._main_layout = QtWidgets.QVBoxLayout()
+        self._main_layout.setSpacing(10)
+
+        self._url_edit = QtWidgets.QLineEdit()
+        self._reload_button = QtWidgets.QPushButton()
+        self._title_edit = QtWidgets.QLineEdit()
+        self._authors_edit = QtWidgets.QLineEdit()
+        self._narrators_edit = QtWidgets.QLineEdit()
+        self._series_edit = QtWidgets.QLineEdit()
+        self._series_no_edit = QtWidgets.QLineEdit()
+        debug("added all widgets")
+
+        self._add_single_line_widget("URL", self._url_edit)
+        self._add_line_and_reload_button_widget()
+        self._add_single_line_widget("Title", self._title_edit)
+        self._add_single_line_widget("Authors", self._authors_edit)
+        self._add_single_line_widget("Narrators", self._narrators_edit)
+        self._add_series_widget()
+
+        self.setLayout(self._main_layout)
+
+    @staticmethod
+    def _label_font():
+        label_font = QtGui.QFont()
+        label_font.setPixelSize(10)
+        label_font.setBold(True)
+        return label_font
+
+    def _add_single_line_widget(self, label, widget):
+        debug("adding widget: %s, label: %s", widget, label)
+
+        size_policy_min = QtWidgets.QSizePolicy("Minimum")
+
+        group_box = QtWidgets.QGroupBox()
+        group_box.setTitle(label)
+        group_box.setFlat(True)
+        group_box.setFont(self._label_font())
+        group_box.setSizePolicy(size_policy_min)
+
+        group_box_layout = QtWidgets.QHBoxLayout()
+        group_box_layout.addWidget(widget)
+        group_box_layout.setContentsMargins(0, 5, 0, 0)
+        group_box_layout.setSizeConstraint(QtWidgets.QLayout.SetMinAndMaxSize)
+
+        group_box.setLayout(group_box_layout)
+
+        self._main_layout.addWidget(group_box)
+
+    def _add_line_and_reload_button_widget(self):
+        #customize (create) line:
+        line = QtWidgets.QFrame()
+        line.setFrameShape(QtWidgets.QFrame.HLine)
+        line.setFrameShadow(QtWidgets.QFrame.Sunken)
+
+        #fixed_policy = QtWidgets.QSizePolicy()
+        #customize button:
+        self._reload_button.setText("&Reload")
+        self._reload_button.setSizePolicy(QtWidgets.QSizePolicy())
+
+        #create layout for both:
+        line_btn_layout = QtWidgets.QHBoxLayout()
+        line_btn_layout.addWidget(line)
+        line_btn_layout.addWidget(self._reload_button)
+
+        self._main_layout.addLayout(line_btn_layout)
+
+    def _add_series_widget(self):
+        debug("adding series wiget")
+
+        size_policy_min = QtWidgets.QSizePolicy("Minimum")
+
+        series_layout = QtWidgets.QHBoxLayout()
+
+        series_title_box = QtWidgets.QGroupBox()
+        series_title_box.setTitle("Series")
+        series_title_box.setFlat(True)
+        series_title_box.setFont(self._label_font())
+        series_title_box.setSizePolicy(size_policy_min)
+
+        series_title_layout = QtWidgets.QHBoxLayout()
+        series_title_layout.addWidget(self._series_edit)
+        #series_title_layout.setContentsMargins(0, 5, 0, 0)
+        series_title_layout.setSizeConstraint(QtWidgets.QLayout.SetMinAndMaxSize)
+
+        series_title_box.setLayout(series_title_layout)
+
+        series_layout.addWidget(series_title_box)
+
+        series_no_box = QtWidgets.QGroupBox()
+        series_no_box.setTitle("Nº")
+        series_no_box.setFlat(True)
+        series_no_box.setFont(self._label_font())
+        series_no_box.setSizePolicy(size_policy_min)
+
+        series_no_layout = QtWidgets.QHBoxLayout()
+        series_no_layout.addWidget(self._series_no_edit)
+        #series_no_layout.setContentsMargins(0, 5, 0, 0)
+        series_no_layout.setSizeConstraint(QtWidgets.QLayout.SetMinAndMaxSize)
+
+        series_no_box.setLayout(series_no_layout)
+
+        series_layout.addWidget(series_no_box)
+
+        self._main_layout.addLayout(series_layout)
+
+"""
+class URLPage2(QtWidgets.QWizardPage):
+    def __init__(self, config, parent=None):
+        super(URLPage, self).__init__(parent)
+        debug("instantiated URLPage class")
+
+        if not isinstance(config, Config):
+            raise ValueError("config must be an instance of Config class")
+        else:
+            self.config = config
+
+        self.setTitle("URL")
         self.setSubTitle("Enter an url to the Audible page with metadata for this book:")
 
         self._url_line = QtWidgets.QLineEdit()
@@ -339,10 +458,14 @@ class URLPage(QtWidgets.QWizardPage):
         self._edit_authors = QtWidgets.QLineEdit()
         self._label_narrators = QtWidgets.QLabel()
         self._edit_narrators = QtWidgets.QLineEdit()
+
         self._series_label = QtWidgets.QLabel()
         self._edit_series = QtWidgets.QLineEdit()
         self._series_no_label = QtWidgets.QLabel()
         self._edit_series_no = QtWidgets.QLineEdit()
+
+        self._date_label = QtWidgets.QLabel()
+        self._edit_date = QtWidgets.QLineEdit()
         self._description_label = QtWidgets.QLabel()
         self._edit_description = QtWidgets.QPlainTextEdit()
         self._copyright_label = QtWidgets.QLabel()
@@ -383,6 +506,9 @@ class URLPage(QtWidgets.QWizardPage):
         self._edit_series_no.setMaxLength(2)
         self._edit_series_no.setMaximumWidth(40)
 
+        self._date_label.setText("Date:")
+        self._date_label.setSizePolicy(fixed_policy)
+
         self._description_label.setText("Description:")
 
         self._copyright_label.setText("Copyright:")
@@ -413,6 +539,9 @@ class URLPage(QtWidgets.QWizardPage):
         grid_middle.addWidget(self._series_no_label, 4, 3, 1, 1)
         grid_middle.addWidget(self._edit_series_no, 4, 4, 1, 1)
 
+        grid_middle.addWidget(self._date_label, 5, 1, 1, 1)
+        grid_middle.addWidget(self._edit_date, 5, 2, 1, 1)
+
         grid_botttom.addWidget(self._description_label, 1, 1, 1, 1)
         grid_botttom.addWidget(self._edit_description, 2, 1, 1, 4)
 
@@ -428,7 +557,7 @@ class URLPage(QtWidgets.QWizardPage):
 
     def nextId(self):
         return Wizard.PathsPage
-
+"""
 
 def parse_args():
     parser = ArgumentParser()
