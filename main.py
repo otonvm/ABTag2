@@ -337,35 +337,47 @@ class URLPage(QtWidgets.QWizardPage):
         self.setSubTitle("Enter an audible url that points to the metadata of your book.")
 
         #add widgets:
+        #some widgets are connected to slots that validate their contents,
+        #some widgets are also connected to slots that reset their style
+        #in case it was changed by a warning
+        #main layout:
         self._main_layout = QtWidgets.QVBoxLayout()
         self._main_layout.setSpacing(10)
 
+        #box for url
         self._url_edit = QtWidgets.QLineEdit()
-        self.registerField("url*", self._url_edit)
         self._url_edit.editingFinished.connect(self._input_url_changed)
+        self._url_edit.textChanged.connect(self._reset_style)
 
         self._reload_button = QtWidgets.QPushButton()
         self._reload_button.clicked.connect(self._reload_clicked)
 
         self._title_edit = QtWidgets.QLineEdit()
-        self.registerField("title*", self._title_edit)
+        self._title_edit.editingFinished.connect(self._validate_text_box)
+        self._title_edit.textChanged.connect(self._reset_style)
+
         self._authors_edit = QtWidgets.QLineEdit()
-        self.registerField("authors*", self._authors_edit)
+        self._authors_edit.editingFinished.connect(self._validate_text_box)
+        self._authors_edit.textChanged.connect(self._reset_style)
+
         self._narrators_edit = QtWidgets.QLineEdit()
-        self.registerField("narrators*", self._narrators_edit)
+        self._narrators_edit.editingFinished.connect(self._validate_text_box)
+        self._narrators_edit.textChanged.connect(self._reset_style)
+
         self._series_edit = QtWidgets.QLineEdit()
-        self.registerField("series", self._series_edit)
 
         self._series_no_edit = QtWidgets.QLineEdit()
         self._series_no_edit.setMaximumWidth(40)
-        self.registerField("series_no", self._series_no_edit)
 
         self._date_edit = QtWidgets.QLineEdit()
-        self.registerField("date*", self._date_edit)
+        self._date_edit.editingFinished.connect(self._validate_text_box)
+        self._date_edit.textChanged.connect(self._reset_style)
+
         self._description_edit = QtWidgets.QPlainTextEdit()
-        self.registerField("description*", self._description_edit)
+
         self._copyright_edit = QtWidgets.QLineEdit()
-        self.registerField("copyright*", self._copyright_edit)
+        self._copyright_edit.editingFinished.connect(self._validate_text_box)
+        self._copyright_edit.textChanged.connect(self._reset_style)
         debug("created all widgets")
 
         #setup widgets and layout:
@@ -545,12 +557,11 @@ class URLPage(QtWidgets.QWizardPage):
                 self._load_metadata()
                 self._update_gui()
                 #only now enable next button:
-                #TODO: field validation!
                 self._next_button_enabled(True)
                 return
             else:
                 debug("url is invalid")
-                #remove reset self._url:
+                #remove/reset self._url:
                 self._url = None
                 #set warning:
                 self._url_edit.setText("This url is not valid!")
@@ -571,6 +582,15 @@ class URLPage(QtWidgets.QWizardPage):
             return
 
     @QtCore.pyqtSlot()
+    def _reset_style(self):
+        sender = self.sender()
+        if hasattr(sender, "setStyleSheet"):
+            sender.setStyleSheet("")
+            return
+        else:
+            return
+
+    @QtCore.pyqtSlot()
     def _reload_clicked(self):
         self._url = self._url_edit.text()
         self._check_url_update_gui()
@@ -584,6 +604,20 @@ class URLPage(QtWidgets.QWizardPage):
             self._url = self._url_edit.text()
             self._check_url_update_gui()
         return
+
+    @QtCore.pyqtSlot()
+    def _validate_text_box(self):
+        sender = self.sender()
+        if hasattr(sender, "text"):
+            if len(sender.text()) == 0:
+                sender.setText("Required")
+                sender.setStyleSheet("color: red; font-style: italic;")
+                self._next_button_enabled(False)
+            else:
+                self._next_button_enabled(True)
+            return
+        else:
+            return
 
     def _load_metadata(self):
         debug("loading metadata from url: %s", self._url)
@@ -623,6 +657,17 @@ class URLPage(QtWidgets.QWizardPage):
         self._date_edit.setText(self._date)
         self._description_edit.setPlainText(self._description)
         self._copyright_edit.setText(self._copyright)
+        return
+
+    def _get_edit_data(self):
+        self._title = self._title_edit.text()
+        self._authors = self._authors_edit.text()
+        self._narrators = self._narrators_edit.text()
+        self._series = self._series_edit.text()
+        self._series_no = self._series_no_edit.text()
+        self._date = self._date_edit.text()
+        self._description = self._description_edit.document()
+        self._copyright = self._copyright_edit.text()
         return
 
     def _next_button_enabled(self, status):
