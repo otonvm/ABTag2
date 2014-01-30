@@ -543,7 +543,8 @@ class URLPage(QtWidgets.QWizardPage):
             else:
                 debug("url is invalid")
                 self._url_edit.setText("This url is not valid!")
-                self._url_edit.set
+                self._url_edit.setStyleSheet("color: red;")
+                self._url_edit.setStyleSheet("font-style: italic;")
                 self._next_button_enabled(False)
         else:
             self._url_edit.setPlaceholderText("Enter url and press Return or click Reload...")
@@ -681,7 +682,8 @@ if __name__ == "__main__":
         #sys.argv.append("--cover")
         #sys.argv.append(r"D:\Downloads\ImmPoster.jpg")
         sys.argv.append("test_ab")
-        sys.argv.append("http://www.audible.com/pd/Sci-Fi-Fantasy/On-Basilisk-Station-Audiobook/B002V1BOWY/ref=a_search_c4_1_1_srTtl?qid=1391030110&sr=1-1")
+        #sys.argv.append("http://www.audible.com/pd/Sci-Fi-Fantasy/On-Basilisk-Station-Audiobook/B002V1BOWY/ref=a_search_c4_1_1_srTtl?qid=1391030110&sr=1-1")
+
         pass
 
     sys.exit(main())
