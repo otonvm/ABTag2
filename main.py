@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import os
+import re
 import sys
 import logging
 import platform
@@ -78,7 +79,8 @@ class Wizard(QtWidgets.QWizard):
             raise ValueError("config must be an instance of Config class")
 
         self.setModal(True)
-        self.setFixedSize(700, 550)
+        self.setFixedSize(800, 600)
+        self.setWindowFlags(QtCore.Qt.MSWindowsFixedSizeDialogHint)
 
         self.setPage(self.PathsPage, PathsPage(config))
         self.setPage(self.URLPage, URLPage(config))
@@ -270,6 +272,7 @@ class PathsPage(QtWidgets.QWizardPage):
         self._path_tree.expandAll()
         return
 
+    @QtCore.pyqtSlot()
     def _browse_path(self):
         debug("Browse button pressed")
 
@@ -333,15 +336,18 @@ class URLPage(QtWidgets.QWizardPage):
         self.setTitle("URL")
         self.setSubTitle("Enter an audible url that points to the metadata of your book.")
 
-        #ad widgets:
+        #add widgets:
         self._main_layout = QtWidgets.QVBoxLayout()
         self._main_layout.setSpacing(10)
 
         self._url_edit = QtWidgets.QLineEdit()
         self.registerField("url*", self._url_edit)
+        #self._url_edit.setValidator(URLValidator())
+        #self._url_edit.setReadOnly(False)
+        self._url_edit.editingFinished.connect(self._input_url_changed)
 
         self._reload_button = QtWidgets.QPushButton()
-        self._reload_button.clicked.connect(self._update_url_box)
+        self._reload_button.clicked.connect(self._reload_clicked)
 
         self._title_edit = QtWidgets.QLineEdit()
         self._authors_edit = QtWidgets.QLineEdit()
@@ -358,7 +364,7 @@ class URLPage(QtWidgets.QWizardPage):
 
         #setup widgets and layout:
         self._add_single_line_widget("URL", self._url_edit)
-        self._add_line_and_reload_button_widget()
+        self._add_line_reload_button_widget()
         self._add_single_line_widget("Title", self._title_edit)
         self._add_single_line_widget("Authors", self._authors_edit)
         self._add_single_line_widget("Narrators", self._narrators_edit)
@@ -370,17 +376,20 @@ class URLPage(QtWidgets.QWizardPage):
         debug("set main layout to window")
 
         #set class members:
-        self._complete = False
-        self._title = False
-        self._authors = False
-        self._narrators = False
-        self._series = False
-        self._series_no = False
-        self._date = False
-        self._description = False
-        self._copyright = False
+        self._url = None
+        if self.config.url is not None:
+            self._url = self.config.url
+        self._complete = None
+        self._title = None
+        self._authors = None
+        self._narrators = None
+        self._series = None
+        self._series_no = None
+        self._date = None
+        self._description = None
+        self._copyright = None
 
-        self._update_url_box()
+        self._check_url_update_gui()
 
     @staticmethod
     def _label_font():
@@ -388,18 +397,6 @@ class URLPage(QtWidgets.QWizardPage):
         label_font.setPixelSize(10)
         label_font.setBold(True)
         return label_font
-
-    @staticmethod
-    def _italic_font():
-        font = QtGui.QFont()
-        font.setItalic(True)
-        return font
-
-    @staticmethod
-    def _red_brush():
-        brush = QtGui.QBrush()
-        brush.setColor(QtGui.QColor("red"))
-        return brush
 
     def _add_single_line_widget(self, label, widget):
         debug("adding widget: %s, label: %s", widget, label)
@@ -421,7 +418,7 @@ class URLPage(QtWidgets.QWizardPage):
 
         self._main_layout.addWidget(group_box)
 
-    def _add_line_and_reload_button_widget(self):
+    def _add_line_reload_button_widget(self):
         debug("adding line and reload button")
 
         #customize (create) line:
@@ -529,41 +526,89 @@ class URLPage(QtWidgets.QWizardPage):
 
         self._main_layout.addWidget(group_box)
 
-    def _update_url_box(self):
+    def _check_url_update_gui(self):
         debug("updating url box")
-        if self.config.url is not None:
-            debug("current url: %s", self.config.url)
 
-            self._url_edit.setText(self.config.url)
-            if self.metadata.is_url_valid(self.config.url):
+        if self._url is not None:
+            if Metadata.is_url_valid(self._url):
                 debug("url is valid")
+                self._url_edit.setStyleSheet("")
+                #set text of box (again if needed):
+                self._url_edit.setText(self._url)
+                #update gui with real metadata:
                 self._load_metadata()
                 self._update_gui()
+                #only now enable next button:
+                #TODO: field validation!
                 self._next_button_enabled(True)
+                return
             else:
                 debug("url is invalid")
+                #remove reset self._url:
+                self._url = None
+                #set warning:
                 self._url_edit.setText("This url is not valid!")
-                self._url_edit.setStyleSheet("color: red;")
-                self._url_edit.setStyleSheet("font-style: italic;")
+                self._url_edit.setStyleSheet("font-style: italic; color: red;")
+                #disable next button
                 self._next_button_enabled(False)
+                #update gui with empty values:
+                self._load_metadata()
+                self._update_gui()
+                return
         else:
+            self._url_edit.setStyleSheet("")
             self._url_edit.setPlaceholderText("Enter url and press Return or click Reload...")
+            self._next_button_enabled(False)
+            #update gui with empty values:
+            self._load_metadata()
+            self._update_gui()
+            return
+
+    @QtCore.pyqtSlot()
+    def _reload_clicked(self):
+        self._url = self._url_edit.text()
+        self._check_url_update_gui()
+        return
+
+    @QtCore.pyqtSlot()
+    def _input_url_changed(self):
+        if self._url == self._url_edit.text():
+            return
+        else:
+            self._url = self._url_edit.text()
+            self._check_url_update_gui()
         return
 
     def _load_metadata(self):
-        debug("loading metadata from url")
-        self.metadata.http_page(self.config.url)
-        self._title = self.metadata.title
-        self._authors = self.metadata.authors
-        self._narrators = self.metadata.narrators
-        (self._series, self._series_no) = self.metadata.series()
-        self._date = self.metadata.date_utc
-        self._description = self.metadata.description
-        self._copyright = self.metadata.copyright
-        return
+        debug("loading metadata from url: %s", self._url)
+
+        if self._url is not None:
+            #read metadata and set class members:
+            #TODO: handle exeptions!
+            self.metadata.http_page(self._url)
+            self._title = self.metadata.title
+            self._authors = self.metadata.authors
+            self._narrators = self.metadata.narrators
+            (self._series, self._series_no) = self.metadata.series()
+            self._date = self.metadata.date_utc
+            self._description = self.metadata.description
+            self._copyright = self.metadata.copyright
+            return
+        else:
+            #set all class members to empty values:
+            self._title = ""
+            self._authors = ""
+            self._narrators = ""
+            self._series = ""
+            self._series_no = 0
+            self._date = ""
+            self._description = ""
+            self._copyright = ""
+            return
 
     def _update_gui(self):
         debug("updating gui with metadata")
+        #dumb function that sets whatever class members contain:
         self._title_edit.setText(self._title)
         self._authors_edit.setText(self._authors)
         self._narrators_edit.setText(self._narrators)
@@ -589,6 +634,9 @@ class URLPage(QtWidgets.QWizardPage):
             return True
         else:
             return False
+
+    def validatePage(self):
+        return True
 
     def nextId(self):
         return Wizard.PathsPage
@@ -675,6 +723,7 @@ if __name__ == "__main__":
     if platform.system() == "Darwin":
         sys.argv.append("test_ab")
         sys.argv.append("http://www.audible.com/pd/Sci-Fi-Fantasy/On-Basilisk-Station-Audiobook/B002V1BOWY/ref=a_search_c4_1_1_srTtl?qid=1391030110&sr=1-1")
+        #sys.argv.append("test_ab")
         pass
     else:
         #sys.argv.append("--help")

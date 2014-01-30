@@ -234,7 +234,7 @@ class Metadata:
 ########    METHODS THAT EXTRAT SERIES DATA ####
     def _set_series_tuple(self):
         series = self._soup.find('div', {'class': 'adbl-series-link'})
-        debug("series: %s", self.series)
+        debug("series: %s", series)
 
         if series:
             series_name = series.a.string.strip()
