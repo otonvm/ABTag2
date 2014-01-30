@@ -342,35 +342,41 @@ class URLPage(QtWidgets.QWizardPage):
 
         self._url_edit = QtWidgets.QLineEdit()
         self.registerField("url*", self._url_edit)
-        #self._url_edit.setValidator(URLValidator())
-        #self._url_edit.setReadOnly(False)
         self._url_edit.editingFinished.connect(self._input_url_changed)
 
         self._reload_button = QtWidgets.QPushButton()
         self._reload_button.clicked.connect(self._reload_clicked)
 
         self._title_edit = QtWidgets.QLineEdit()
+        self.registerField("title*", self._title_edit)
         self._authors_edit = QtWidgets.QLineEdit()
+        self.registerField("authors*", self._authors_edit)
         self._narrators_edit = QtWidgets.QLineEdit()
+        self.registerField("narrators*", self._narrators_edit)
         self._series_edit = QtWidgets.QLineEdit()
+        self.registerField("series", self._series_edit)
 
         self._series_no_edit = QtWidgets.QLineEdit()
         self._series_no_edit.setMaximumWidth(40)
+        self.registerField("series_no", self._series_no_edit)
 
         self._date_edit = QtWidgets.QLineEdit()
+        self.registerField("date*", self._date_edit)
         self._description_edit = QtWidgets.QPlainTextEdit()
+        self.registerField("description*", self._description_edit)
         self._copyright_edit = QtWidgets.QLineEdit()
+        self.registerField("copyright*", self._copyright_edit)
         debug("created all widgets")
 
         #setup widgets and layout:
-        self._add_single_line_widget("URL", self._url_edit)
+        self._add_single_line_widget("&URL", self._url_edit)
         self._add_line_reload_button_widget()
-        self._add_single_line_widget("Title", self._title_edit)
-        self._add_single_line_widget("Authors", self._authors_edit)
-        self._add_single_line_widget("Narrators", self._narrators_edit)
+        self._add_single_line_widget("&Title", self._title_edit)
+        self._add_single_line_widget("&Authors", self._authors_edit)
+        self._add_single_line_widget("Na&rrators", self._narrators_edit)
         self._add_series_date_widget()
         self._add_description_widget()
-        self._add_single_line_widget("Copyright", self._copyright_edit)
+        self._add_single_line_widget("&Copyright", self._copyright_edit)
 
         self.setLayout(self._main_layout)
         debug("set main layout to window")
@@ -448,7 +454,7 @@ class URLPage(QtWidgets.QWizardPage):
 
         #QGroupBox for series title text box:
         series_title_box = QtWidgets.QGroupBox()
-        series_title_box.setTitle("Series")
+        series_title_box.setTitle("&Series")
         series_title_box.setFlat(True)
         series_title_box.setFont(self._label_font())
         series_title_box.setSizePolicy(size_policy_min)
@@ -467,7 +473,7 @@ class URLPage(QtWidgets.QWizardPage):
 
         #QGroupBox for series nº text box:
         series_no_box = QtWidgets.QGroupBox()
-        series_no_box.setTitle("Nº")
+        series_no_box.setTitle("&Nº")
         series_no_box.setFlat(True)
         series_no_box.setFont(self._label_font())
         series_no_box.setSizePolicy(size_policy_min)
@@ -486,7 +492,7 @@ class URLPage(QtWidgets.QWizardPage):
 
         #QGroupBox for date text box:
         date_box = QtWidgets.QGroupBox()
-        date_box.setTitle("Date")
+        date_box.setTitle("Da&te")
         date_box.setFlat(True)
         date_box.setFont(self._label_font())
         date_box.setSizePolicy(size_policy_min)
@@ -512,7 +518,7 @@ class URLPage(QtWidgets.QWizardPage):
         size_policy_min = QtWidgets.QSizePolicy("Minimum")
 
         group_box = QtWidgets.QGroupBox()
-        group_box.setTitle("Description")
+        group_box.setTitle("Descri&ption")
         group_box.setFlat(True)
         group_box.setFont(self._label_font())
         group_box.setSizePolicy(size_policy_min)
@@ -584,7 +590,7 @@ class URLPage(QtWidgets.QWizardPage):
 
         if self._url is not None:
             #read metadata and set class members:
-            #TODO: handle exeptions!
+            #TODO: handle exceptions!
             self.metadata.http_page(self._url)
             self._title = self.metadata.title
             self._authors = self.metadata.authors
@@ -600,7 +606,7 @@ class URLPage(QtWidgets.QWizardPage):
             self._authors = ""
             self._narrators = ""
             self._series = ""
-            self._series_no = 0
+            self._series_no = ""
             self._date = ""
             self._description = ""
             self._copyright = ""
@@ -635,8 +641,8 @@ class URLPage(QtWidgets.QWizardPage):
         else:
             return False
 
-    def validatePage(self):
-        return True
+    #def validatePage(self):
+    #    return True
 
     def nextId(self):
         return Wizard.PathsPage
