@@ -54,6 +54,15 @@ class Wizard(QtWidgets.QWizard):
         QtWidgets.QShortcut(QtGui.QKeySequence("Ctrl+Q"), self, self.close)
         QtWidgets.QShortcut(QtGui.QKeySequence("Ctrl+W"), self, self.close)
 
+        import inspect
+        for name in dir(self):
+            obj = getattr(self, name)
+            if inspect.isclass(obj) and issubclass(obj, QtCore.QObject):
+                for name2 in dir(obj):
+                    obj2 = getattr(obj, name2)
+                    if isinstance(obj2, QtCore.pyqtSignal):
+                        print(name, name2)
+
 
 class PathPage(QtWidgets.QWizardPage):
     def __init__(self, config, parent=None):
@@ -754,24 +763,57 @@ class ProcessingPage(QtWidgets.QWizardPage):
             self.config = config
 
         self.setTitle("Processing")
-        self.setSubTitle("Review the data that will be used for tagging each file.\n \
-        When ready click Tag files.")
+        self.setSubTitle("Review the data that will be used for tagging each file. When ready click Start.")
 
         self._main_layout = QtWidgets.QVBoxLayout()
-        self._main_layout.setSpacing(10)
+        self._tree_table_layout = QtWidgets.QHBoxLayout()
+        self._progress_layout = QtWidgets.QHBoxLayout()
 
-        button = QtWidgets.QPushButton("Press")
-        button.clicked.connect(self._parse_metadata)
-        self._main_layout.addWidget(button)
-
-        self.setLayout(self._main_layout)
+        self._files_tree = QtWidgets.QTreeView()
+        self._data_table = QtWidgets.QTableView()
+        self._log_view = QtWidgets.QPlainTextEdit()
+        self._progress_bar = QtWidgets.QProgressBar()
+        self._start_stop_button = QtWidgets.QPushButton()
 
         self._database = None
+
+    def _setup_widgets(self):
+        self._setup_files_tree()
+
+        return
+
+    def _setup_files_tree(self):
+        files_tree_model = QtGui.QStandardItemModel()
+        root_folder = os.path.basename(self.config.input_folder)
+        root_folder = QtGui.QStandardItem(root_folder)
+        files_tree_model.appendRow(root_folder)
+
+        for file in self.config.audio_files:
+            filename = os.path.basename(file)
+            filename = QtGui.QStandardItem(filename)
+            root_folder.appendRow(filename)
+
+        self._files_tree.setModel(files_tree_model)
+        self._files_tree.header().close()
+        self._files_tree.expandAll()
+        return
+
+    def _setup_layout(self):
+        self._tree_table_layout.addWidget(self._files_tree)
+        self._tree_table_layout.addWidget(self._data_table)
+        self._main_layout.addLayout(self._tree_table_layout)
+        self._main_layout.addWidget(self._log_view)
+        self._progress_layout.addWidget(self._progress_bar)
+        self._progress_layout.addWidget(self._start_stop_button)
+        self._main_layout.addLayout(self._progress_layout)
+        self.setLayout(self._main_layout)
+        return
 
     def _parse_metadata(self):
         """Creates a list of dicts that map metadata to each file
         to be tagged."""
 
+        #create/reset database:
         self._database = {}
 
         current_track_no = 0
@@ -809,6 +851,9 @@ class ProcessingPage(QtWidgets.QWizardPage):
             audio_file_data["copyright"] = self.config.copyright
 
             self._database.update({audio_file: audio_file_data})
+        return
 
     def initializePage(self):
         self._parse_metadata()
+        self._setup_layout()
+        self._setup_widgets()
