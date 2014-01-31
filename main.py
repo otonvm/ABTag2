@@ -321,6 +321,18 @@ class PathsPage(QtWidgets.QWizardPage):
             return False
 
 
+class DescriptionBox(QtWidgets.QPlainTextEdit):
+    lost_focus = QtCore.pyqtSignal()
+
+    def __init__(self, parent=None):
+        super(DescriptionBox, self).__init__(parent)
+
+    def focusOutEvent(self, event):
+        QtWidgets.QPlainTextEdit.focusOutEvent(self, event)
+        self.lost_focus.emit()
+        event.accept()
+
+
 class URLPage(QtWidgets.QWizardPage):
     def __init__(self, config, parent=None):
         super(URLPage, self).__init__(parent)
@@ -335,6 +347,7 @@ class URLPage(QtWidgets.QWizardPage):
 
         self.setTitle("URL")
         self.setSubTitle("Enter an audible url that points to the metadata of your book.")
+        self.setStyleSheet("QLineEdit QPlainTextEdit {}")
 
         #add widgets:
         #some widgets are connected to slots that validate their contents,
@@ -373,7 +386,14 @@ class URLPage(QtWidgets.QWizardPage):
         self._date_edit.editingFinished.connect(self._validate_text_box)
         self._date_edit.textChanged.connect(self._reset_style)
 
-        self._description_edit = QtWidgets.QPlainTextEdit()
+        #self._description_edit = QtWidgets.QPlainTextEdit()
+        #self._description_edit.editingFinished.connect(self._validate_description)
+        #self._description_edit.
+        #self._description_edit.textChanged.connect(self._reset_style)
+        self._description_edit = DescriptionBox()
+        self._description_edit
+        self._description_edit.lost_focus.connect(self._validate_description)
+        self._description_edit.textChanged.connect(self._reset_style)
 
         self._copyright_edit = QtWidgets.QLineEdit()
         self._copyright_edit.editingFinished.connect(self._validate_text_box)
@@ -619,6 +639,20 @@ class URLPage(QtWidgets.QWizardPage):
         else:
             return
 
+    @QtCore.pyqtSlot()
+    def _validate_description(self):
+        sender = self.sender()
+        if hasattr(sender, "toPlainText"):
+            if len(sender.toPlainText()) == 0:
+                sender.setPlainText("Required")
+                sender.setStyleSheet("color: red; font-style: italic;")
+                self._next_button_enabled(False)
+            else:
+                self._next_button_enabled(True)
+            return
+        else:
+            return
+
     def _load_metadata(self):
         debug("loading metadata from url: %s", self._url)
 
@@ -633,6 +667,7 @@ class URLPage(QtWidgets.QWizardPage):
             self._date = self.metadata.date_utc
             self._description = self.metadata.description
             self._copyright = self.metadata.copyright
+            debug("got metadata from url")
             return
         else:
             #set all class members to empty values:
@@ -644,6 +679,7 @@ class URLPage(QtWidgets.QWizardPage):
             self._date = ""
             self._description = ""
             self._copyright = ""
+            debug("set metadata to blank values")
             return
 
     def _update_gui(self):
@@ -666,9 +702,25 @@ class URLPage(QtWidgets.QWizardPage):
         self._series = self._series_edit.text()
         self._series_no = self._series_no_edit.text()
         self._date = self._date_edit.text()
-        self._description = self._description_edit.document()
+        #self._description = self._description_edit.document()
+        self._description = self._description_edit.toPlainText()
         self._copyright = self._copyright_edit.text()
         return
+
+    def _store_metadata(self):
+        self.config.title = self._title_edit.text()
+        authors = self._authors_edit.text()
+        authors = authors.split(', ')
+        self.config.authors = authors
+        narrators = self._narrators_edit.text()
+        narrators = narrators.split(', ')
+        self.config.narrators = narrators
+        self.config.series_title = self._series_edit.text()
+        self.config.series_no = self._series_no_edit.text()
+        self.config.date = self._date_edit.text()
+        self.config.description = self._description_edit.toPlainText()
+        self.config.copyright = self._copyright_edit.text()
+        print(self.config)
 
     def _next_button_enabled(self, status):
         """This function sets the value of _complete
@@ -680,14 +732,17 @@ class URLPage(QtWidgets.QWizardPage):
 
     def isComplete(self):
         """Reimplementation of QWizardPage.isComplete with
-        a check of a class variable"""
+        a check of a class variable."""
         if self._complete:
             return True
         else:
             return False
 
-    #def validatePage(self):
-    #    return True
+    def validatePage(self):
+        """Just before going to the next page
+        store all data in config."""
+        self._store_metadata()
+        return True
 
     def nextId(self):
         return Wizard.PathsPage
