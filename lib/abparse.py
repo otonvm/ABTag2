@@ -1,9 +1,7 @@
-#!/usr/bin/env/python3
 # -*- coding: utf-8 -*-
 
 import re
 import os
-import sys
 import time
 import logging
 import urllib.error
