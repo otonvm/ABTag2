@@ -83,7 +83,7 @@ class Config:
                 return "Book {}: {}".format(self.series_no,
                                             self.title)
         else:
-            return self._title
+            return self.title
 
     @property
     def authors(self):

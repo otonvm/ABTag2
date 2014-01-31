@@ -48,7 +48,7 @@ class Wizard(QtWidgets.QWizard):
 
         self.setPage(self.PathPage, PathPage(config))
         self.setPage(self.URLPage, URLPage(config))
-        self.setPage(self.ProcessingPage, ProcessingPage())
+        self.setPage(self.ProcessingPage, ProcessingPage(config))
         self.setStartId(self.PathPage)
 
         QtWidgets.QShortcut(QtGui.QKeySequence("Ctrl+Q"), self, self.close)
@@ -72,14 +72,16 @@ class PathPage(QtWidgets.QWizardPage):
         self.path_browse_btn = QtWidgets.QPushButton("&Browse")
         self._path_tree = QtWidgets.QTreeView()
         self._files = None
+        self._audio_files = None
+        self._cover = None
         self._complete = False
 
         self._setup_widgets()
         self._setup_layout()
 
-        self._get_files()
-        self._update_path_line()
-        self._update_tree()
+        #self._get_files()
+        #self._update_path_line()
+        #self._update_tree()
 
     def _setup_widgets(self):
         self.path_browse_btn.clicked.connect(self._browse_path)
@@ -140,6 +142,8 @@ class PathPage(QtWidgets.QWizardPage):
             #get all files in the folder:
             files = Parse(self.config.input_folder)
             self._files = files.all_files
+            self._audio_files = files.audio_files
+            self._cover = files.cover
             debug("got all files from %s", self.config.input_folder)
             return
         else:
@@ -266,6 +270,10 @@ class PathPage(QtWidgets.QWizardPage):
             warn("no path selected from QFileDialog()")
             return
 
+    def _store_files_data(self):
+        self.config.audio_files = self._audio_files
+        self.config.cover = self._cover
+
     def nextId(self):
         return Wizard.URLPage
 
@@ -284,6 +292,18 @@ class PathPage(QtWidgets.QWizardPage):
             return True
         else:
             return False
+
+    def validatePage(self):
+        """Just before going to the next page
+        store all data in config."""
+        self._store_files_data()
+        return True
+
+    def initializePage(self):
+        print("start")
+        self._get_files()
+        self._update_path_line()
+        self._update_tree()
 
 
 class DescriptionBox(QtWidgets.QPlainTextEdit):
@@ -387,7 +407,7 @@ class URLPage(QtWidgets.QWizardPage):
         self._description = None
         self._copyright = None
 
-        self._check_url_update_gui()
+        #self._check_url_update_gui()
 
     @staticmethod
     def _label_font():
@@ -668,17 +688,31 @@ class URLPage(QtWidgets.QWizardPage):
 
     def _store_metadata(self):
         self.config.title = self._title_edit.text()
+
         authors = self._authors_edit.text()
         authors = authors.split(', ')
         self.config.authors = authors
+
         narrators = self._narrators_edit.text()
         narrators = narrators.split(', ')
         self.config.narrators = narrators
-        self.config.series_title = self._series_edit.text()
-        self.config.series_no = self._series_no_edit.text()
+
+        if len(self._series_edit.text()) > 0:
+            self.config.series_title = self._series_edit.text()
+        else:
+            pass
+
+        try:
+            self.config.series_no = int(self._series_no_edit.text())
+        except ValueError:
+            pass
+
         self.config.date = self._date_edit.text()
+
         self.config.description = self._description_edit.toPlainText()
+
         self.config.copyright = self._copyright_edit.text()
+        return
 
     def _next_button_enabled(self, status):
         """This function sets the value of _complete
@@ -703,9 +737,78 @@ class URLPage(QtWidgets.QWizardPage):
         return True
 
     def nextId(self):
-        return Wizard.PathPage
+        return Wizard.ProcessingPage
+
+    def initializePage(self):
+        self._check_url_update_gui()
 
 
 class ProcessingPage(QtWidgets.QWizardPage):
-    def __init__(self, parent=None):
+    def __init__(self, config, parent=None):
         super(ProcessingPage, self).__init__(parent)
+        debug("instantiated ProcessingPage class")
+
+        if not isinstance(config, Config):
+            raise ValueError("config must be an instance of Config class")
+        else:
+            self.config = config
+
+        self.setTitle("Processing")
+        self.setSubTitle("Review the data that will be used for tagging each file.\n \
+        When ready click Tag files.")
+
+        self._main_layout = QtWidgets.QVBoxLayout()
+        self._main_layout.setSpacing(10)
+
+        button = QtWidgets.QPushButton("Press")
+        button.clicked.connect(self._parse_metadata)
+        self._main_layout.addWidget(button)
+
+        self.setLayout(self._main_layout)
+
+        self._database = None
+
+    def _parse_metadata(self):
+        """Creates a list of dicts that map metadata to each file
+        to be tagged."""
+
+        self._database = {}
+
+        current_track_no = 0
+        for audio_file in self.config.audio_files:
+            debug("parsing through metadata for file: %s", audio_file)
+
+            audio_file_data = {}
+
+            audio_file_data["file"] = audio_file
+
+            audio_file_data["cover"] = self.config.cover
+
+            current_track_no += 1
+            audio_file_data["track no"] = current_track_no
+
+            audio_file_data["tot_tracks"] = len(self.config.audio_files)
+
+            audio_file_data["disk no"] = self.config.series_no
+
+            audio_file_data["title"] = self.config.title_full(current_track_no)
+
+            artist_string = "{} (read by {})".format(self.config.authors_string,
+                                                     self.config.narrators_string)
+            audio_file_data["artist"] = artist_string
+
+            audio_file_data["album_artist"] = self.config.authors_string
+
+            if self.config.series_title is not None:
+                audio_file_data["album"] = self.config.series_title
+            else:
+                audio_file_data["album"] = self.config.title
+
+            audio_file_data["description"] = self.config.description
+
+            audio_file_data["copyright"] = self.config.copyright
+
+            self._database.update({audio_file: audio_file_data})
+
+    def initializePage(self):
+        self._parse_metadata()
