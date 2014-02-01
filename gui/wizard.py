@@ -713,7 +713,7 @@ class URLPage(QtWidgets.QWizardPage):
         try:
             self.config.series_no = int(self._series_no_edit.text())
         except ValueError:
-            pass
+            raise
 
         self.config.date = self._date_edit.text()
 
@@ -769,7 +769,7 @@ class ProcessingPage(QtWidgets.QWizardPage):
         self._progress_layout = QtWidgets.QHBoxLayout()
 
         self._files_tree = QtWidgets.QTreeView()
-        self._data_table = QtWidgets.QTableView()
+        self._data_table = QtWidgets.QTableWidget()
         self._data_model = QtGui.QStandardItemModel()
         self._log_view = QtWidgets.QPlainTextEdit()
         self._progress_bar = QtWidgets.QProgressBar()
@@ -805,12 +805,14 @@ class ProcessingPage(QtWidgets.QWizardPage):
         return
 
     def _setup_data_table(self):
-        self._data_model.setVerticalHeaderLabels(["Title", "Artist", "Album",
-                                            "Album Artist", "Track",
-                                            "Tot. Tracks", "Disk",
-                                            "Description", "Copyright"])
-        self._data_table.setModel(self._data_model)
+        self._data_table.setColumnCount(1)
+        self._data_table.setRowCount(9)
+        self._data_table.setVerticalHeaderLabels(["Title", "Artist", "Album",
+                                                  "Album Artist", "Track",
+                                                  "Tot. Tracks", "Disk",
+                                                  "Description", "Copyright"])
         self._data_table.resizeRowsToContents()
+        self._data_table.horizontalHeader().hide()
         return
 
     def _setup_layout(self):
@@ -832,14 +834,42 @@ class ProcessingPage(QtWidgets.QWizardPage):
             if filename in key:
                 data = self._database[key]
 
-        index = 0
-        for key in data.keys():
-            entry = QtGui.QStandardItem(data[key])
-            if self._data_model.insertRow(index, entry):
-                index += 1
-                continue
-            else:
-                raise Exception("boh")
+        item = QtWidgets.QTableWidgetItem(data["title"])
+        item.setFlags(QtCore.Qt.ItemIsEnabled)
+        self._data_table.setItem(0, 0, item)
+        item = QtWidgets.QTableWidgetItem(data["artist"])
+        item.setFlags(QtCore.Qt.ItemIsEnabled)
+        self._data_table.setItem(1, 0, item)
+        item = QtWidgets.QTableWidgetItem(data["album"])
+        item.setFlags(QtCore.Qt.ItemIsEnabled)
+        self._data_table.setItem(2, 0, item)
+        item = QtWidgets.QTableWidgetItem(data["album artist"])
+        item.setFlags(QtCore.Qt.ItemIsEnabled)
+        self._data_table.setItem(3, 0, item)
+        item = QtWidgets.QTableWidgetItem(str(data["track no"]))
+        item.setFlags(QtCore.Qt.ItemIsEnabled)
+        self._data_table.setItem(4, 0, item)
+        item = QtWidgets.QTableWidgetItem(str(data["tot tracks"]))
+        item.setFlags(QtCore.Qt.ItemIsEnabled)
+        self._data_table.setItem(5, 0, item)
+        item = QtWidgets.QTableWidgetItem(str(data["disk no"]))
+        item.setFlags(QtCore.Qt.ItemIsEnabled)
+        self._data_table.setItem(6, 0, item)
+        item = QtWidgets.QTableWidgetItem(data["description"])
+        item.setFlags(QtCore.Qt.ItemIsEnabled)
+        self._data_table.setItem(7, 0, item)
+        item = QtWidgets.QTableWidgetItem(data["copyright"])
+        item.setFlags(QtCore.Qt.ItemIsEnabled)
+        self._data_table.setItem(8, 0, item)
+
+        #self._data_table.resizeColumnsToContents()
+        self._data_table.horizontalHeader().hide()
+        policy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Ignored,
+                                       QtWidgets.QSizePolicy.Ignored)
+        self._data_table.setSizePolicy(policy)
+        self._data_table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
+        self._data_table.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOn)
+        return
 
     def _parse_metadata(self):
         """Creates a list of dicts that map metadata to each file
@@ -861,17 +891,17 @@ class ProcessingPage(QtWidgets.QWizardPage):
             current_track_no += 1
             audio_file_data["track no"] = current_track_no
 
-            audio_file_data["tot_tracks"] = len(self.config.audio_files)
+            audio_file_data["tot tracks"] = len(self.config.audio_files)
 
             audio_file_data["disk no"] = self.config.series_no
 
             audio_file_data["title"] = self.config.title_full(current_track_no)
 
-            artist_string = "%s (read by {1})".format(self.config.authors_string,
+            artist_string = "{} (read by {})".format(self.config.authors_string,
                                                      self.config.narrators_string)
             audio_file_data["artist"] = artist_string
 
-            audio_file_data["album_artist"] = self.config.authors_string
+            audio_file_data["album artist"] = self.config.authors_string
 
             if self.config.series_title is not None:
                 audio_file_data["album"] = self.config.series_title
@@ -881,6 +911,8 @@ class ProcessingPage(QtWidgets.QWizardPage):
             audio_file_data["description"] = self.config.description
 
             audio_file_data["copyright"] = self.config.copyright
+
+            debug("audio_file_data: %s", audio_file_data)
 
             self._database.update({audio_file: audio_file_data})
         return
