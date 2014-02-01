@@ -779,6 +779,7 @@ class ProcessingPage(QtWidgets.QWizardPage):
 
     def _setup_widgets(self):
         self._setup_files_tree()
+        self._setup_data_table()
 
         return
 
@@ -795,7 +796,22 @@ class ProcessingPage(QtWidgets.QWizardPage):
 
         self._files_tree.setModel(files_tree_model)
         self._files_tree.header().close()
+        self._files_tree.setMaximumWidth(200)
         self._files_tree.expandAll()
+
+        selection_model = self._files_tree.selectionModel()
+        selection_model.currentChanged.connect(self._update_data_table)
+
+        return
+
+    def _setup_data_table(self):
+        data_model = QtGui.QStandardItemModel()
+        data_model.setVerticalHeaderLabels(["Title", "Artist", "Album",
+                                            "Album Artist", "Track",
+                                            "Tot. Tracks", "Disk",
+                                            "Description", "Copyright"])
+        self._data_table.setModel(data_model)
+        self._data_table.resizeRowsToContents()
         return
 
     def _setup_layout(self):
@@ -808,6 +824,16 @@ class ProcessingPage(QtWidgets.QWizardPage):
         self._main_layout.addLayout(self._progress_layout)
         self.setLayout(self._main_layout)
         return
+
+    @QtCore.pyqtSlot(QtCore.QModelIndex)
+    def _update_data_table(self, index):
+        filename = index.data()
+
+        for key in self._database.keys():
+            if filename in key:
+                data = self._database[key]
+
+        self._data_table
 
     def _parse_metadata(self):
         """Creates a list of dicts that map metadata to each file

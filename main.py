@@ -17,6 +17,7 @@ from gui.wizard import Wizard
 DEBUG = True
 VERSION = 0.1
 
+
 logger = logging.getLogger(__name__)
 if DEBUG:
     logger.setLevel(logging.DEBUG)
