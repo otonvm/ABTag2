@@ -17,13 +17,12 @@ DEBUG = True
 logger = logging.getLogger(__name__)
 if DEBUG:
     logger.setLevel(logging.DEBUG)
-    log_format = "%(lineno)d: %(funcName)s, %(module)s.py, %(levelname)s: %(message)s"
+    log_format = logging.Formatter("%(lineno)d: %(funcName)s, %(module)s.py, %(levelname)s: %(message)s")
 else:
     logger.setLevel(logging.ERROR)
-    log_format = "%(levelname)s: %(message)s"
+    log_format = logging.Formatter("%(levelname)s: %(message)s")
 stream = logging.StreamHandler()
-fmt = logging.Formatter(log_format, datefmt="%d/%m-%H:%M")
-stream.setFormatter(fmt)
+stream.setFormatter(log_format)
 logger.addHandler(stream)
 debug = logger.debug
 error = logger.error
@@ -341,7 +340,7 @@ class URLPage(QtWidgets.QWizardPage):
 
         self.setTitle("URL")
         self.setSubTitle("Enter an audible url that points to the metadata of your book.")
-        self.setStyleSheet("QLineEdit QPlainTextEdit {}")
+        self.setStyleSheet("QLineEdit QPlainTextEdit %s")
 
         #add widgets:
         #some widgets are connected to slots that validate their contents,
@@ -771,6 +770,7 @@ class ProcessingPage(QtWidgets.QWizardPage):
 
         self._files_tree = QtWidgets.QTreeView()
         self._data_table = QtWidgets.QTableView()
+        self._data_model = QtGui.QStandardItemModel()
         self._log_view = QtWidgets.QPlainTextEdit()
         self._progress_bar = QtWidgets.QProgressBar()
         self._start_stop_button = QtWidgets.QPushButton()
@@ -805,12 +805,11 @@ class ProcessingPage(QtWidgets.QWizardPage):
         return
 
     def _setup_data_table(self):
-        data_model = QtGui.QStandardItemModel()
-        data_model.setVerticalHeaderLabels(["Title", "Artist", "Album",
+        self._data_model.setVerticalHeaderLabels(["Title", "Artist", "Album",
                                             "Album Artist", "Track",
                                             "Tot. Tracks", "Disk",
                                             "Description", "Copyright"])
-        self._data_table.setModel(data_model)
+        self._data_table.setModel(self._data_model)
         self._data_table.resizeRowsToContents()
         return
 
@@ -833,7 +832,14 @@ class ProcessingPage(QtWidgets.QWizardPage):
             if filename in key:
                 data = self._database[key]
 
-        self._data_table
+        index = 0
+        for key in data.keys():
+            entry = QtGui.QStandardItem(data[key])
+            if self._data_model.insertRow(index, entry):
+                index += 1
+                continue
+            else:
+                raise Exception("boh")
 
     def _parse_metadata(self):
         """Creates a list of dicts that map metadata to each file
@@ -861,7 +867,7 @@ class ProcessingPage(QtWidgets.QWizardPage):
 
             audio_file_data["title"] = self.config.title_full(current_track_no)
 
-            artist_string = "{} (read by {})".format(self.config.authors_string,
+            artist_string = "%s (read by {1})".format(self.config.authors_string,
                                                      self.config.narrators_string)
             audio_file_data["artist"] = artist_string
 

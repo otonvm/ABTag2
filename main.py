@@ -21,13 +21,12 @@ VERSION = 0.1
 logger = logging.getLogger(__name__)
 if DEBUG:
     logger.setLevel(logging.DEBUG)
-    log_format = "%(lineno)d: %(funcName)s, %(module)s.py, %(levelname)s: %(message)s"
+    log_format = logging.Formatter("%(lineno)d: %(funcName)s, %(module)s.py, %(levelname)s: %(message)s")
 else:
     logger.setLevel(logging.ERROR)
-    log_format = "%(levelname)s: %(message)s"
+    log_format = logging.Formatter("%(levelname)s: %(message)s")
 stream = logging.StreamHandler()
-fmt = logging.Formatter(log_format, datefmt="%d/%m-%H:%M")
-stream.setFormatter(fmt)
+stream.setFormatter(log_format)
 logger.addHandler(stream)
 debug = logger.debug
 error = logger.error
