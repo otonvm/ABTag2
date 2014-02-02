@@ -778,9 +778,13 @@ class ProcessingPage(QtWidgets.QWizardPage):
         self._database = None
 
     def _setup_widgets(self):
+        self._log_view.setMaximumHeight(200)
+        self._log_view.setStyleSheet("font-size: 10;")
         self._setup_files_tree()
         self._setup_data_table()
 
+        self._start_stop_button.setText("Start")
+        self._start_stop_button.clicked.connect(self._start_stop_button_clicked)
         return
 
     def _setup_files_tree(self):
@@ -862,11 +866,8 @@ class ProcessingPage(QtWidgets.QWizardPage):
         item.setFlags(QtCore.Qt.ItemIsEnabled)
         self._data_table.setItem(8, 0, item)
 
-        #self._data_table.resizeColumnsToContents()
+        self._data_table.resizeColumnsToContents()
         self._data_table.horizontalHeader().hide()
-        policy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Ignored,
-                                       QtWidgets.QSizePolicy.Ignored)
-        self._data_table.setSizePolicy(policy)
         self._data_table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
         self._data_table.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarAlwaysOn)
         return
@@ -917,6 +918,9 @@ class ProcessingPage(QtWidgets.QWizardPage):
             self._database.update({audio_file: audio_file_data})
         return
 
+    @QtCore.pyqtSlot()
+    def _start_stop_button_clicked(self):
+        pass
     def initializePage(self):
         self._parse_metadata()
         self._setup_layout()
