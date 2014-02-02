@@ -123,6 +123,7 @@ class Demux(QtCore.QThread):
                     except ValueError:
                         pass
                 else:
+                    print("HERE")
                     self.progress.emit(100)
                     self.progress.emit("done")
             self.retcode.emit(proc.poll())
@@ -140,6 +141,9 @@ class MP4Box(QtCore.QObject):
     retcode = QtCore.pyqtSignal(int)
     error = QtCore.pyqtSignal(str)
     progress = QtCore.pyqtSignal(int)
+    finished = QtCore.pyqtSignal()
+    msg = QtCore.pyqtSignal(str)
+    msg_error = QtCore.pyqtSignal(str)
 
     def __init__(self, bin_path):
         super().__init__(None)
@@ -154,15 +158,18 @@ class MP4Box(QtCore.QObject):
         self._aac_file = ""
         self._m4b_file = ""
         self._position = 0
+        self._returncode = 0
+        self._error_msg = ""
+        self._status = ""
 
         self._test = Test(self._bin_path)
-        self._test.retcode.connect(self._retcode)
-        self._test.error.connect(self._error)
+        self._test.retcode.connect(self._recieve_emit_retcode)
+        self._test.error.connect(self._recieve_emit_error)
 
         self._demux = Demux(self._bin_path)
-        self._demux.retcode.connect(self._retcode_silent)
-        self._demux.error.connect(self._error_silent)
-        self._demux.progress.connect(self._progress)
+        self._demux.retcode.connect(self._recieve_retcode)
+        self._demux.error.connect(self._recieve_error)
+        self._demux.progress.connect(self._emit_progress)
 
     def test(self):
         debug("testing %s", self._bin_path)
@@ -178,30 +185,48 @@ class MP4Box(QtCore.QObject):
             self._error("cannot find mp4box binary")
 
     @QtCore.pyqtSlot(int)
-    def _retcode(self, code):
-        debug("got returncode: %s", code)
+    def _recieve_emit_retcode(self, code):
+        debug("got returncode signal: %s", code)
 
         self.retcode.emit(code)
 
     @QtCore.pyqtSlot(int)
-    def _retcode_silent(self, code):
-        debug("got returncode: %s", code)
+    def _recieve_retcode(self, code):
+        debug("got returncode signal: %s", code)
+
+        self._returncode = code
 
     @QtCore.pyqtSlot(str)
-    def _error(self, msg):
-        debug("got error: %s", msg)
+    def _recieve_emit_error(self, msg):
+        debug("got error signal: %s", msg)
 
         self.error.emit(msg)
 
+    def _emit_error(self, msg):
+        debug("got error signal: %s", msg)
+
+        self.msg_error.emit("Error: {}".format(msg))
+
     @QtCore.pyqtSlot(str)
-    def _error_silent(self, msg):
-        debug("got error: %s", msg)
+    def _recieve_error(self, msg):
+        debug("got error signal: %s", msg)
+
+        self._error_msg = msg
 
     @QtCore.pyqtSlot(int)
-    def _progress(self, progress):
-        debug("got progress no: %s", progress)
+    @QtCore.pyqtSlot(str)
+    def _emit_progress(self, progress):
+        debug("got progress signal: %s", progress)
 
-        self.progress.emit(progress)
+        if isinstance(progress, int):
+            self.progress.emit(progress)
+        else:
+            self._status = progress
+
+    def _emit_message(self, msg):
+        debug("emitting message: %s", msg)
+
+        self.msg.emit(msg)
 
     def _remux(self, part_no):
         if platform.system() == "Windows":
@@ -268,19 +293,15 @@ class MP4Box(QtCore.QObject):
         self._aac_file = r"{}_demux.aac".format(os.path.join(self._file_path, self._file_name))
         self._m4b_file = r"{}_temp.m4b".format(os.path.join(self._file_path, self._file_name))
 
+        self._emit_message("Demuxing file {}".format(file))
         self._demux.demux(file, self._aac_file)
 
-
-        """
-        if self._demux(file) == 0:
-            if self._remux(part_no) == 0:
-                self._delete(self._aac_file)
-                return True
+        if self._status == "done":
+            if self._returncode != 0:
+                self._emit_error(self._error_msg)
             else:
-                self._delete(self._aac_file)
-                self._delete(self._m4b_file)
-                return False
-        else:
-            self._delete(self._aac_file)
-            self._delete(self._m4b_file)
-            return False"""
+                self._emit_error("test")
+                self._emit_message("Created file: {}".format(self._aac_file))
+                self._emit_message("Remuxing to file: {}".format(self._m4b_file))
+
+

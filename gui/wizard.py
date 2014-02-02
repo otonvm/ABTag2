@@ -785,6 +785,8 @@ class ProcessingPage(QtWidgets.QWizardPage):
 
         self._mp4box = MP4Box(config.mp4box)
         self._mp4box.progress.connect(self._update_progress_bar)
+        self._mp4box.msg.connect(self._update_text_box)
+        self._mp4box.msg_error.connect(self._update_text_box)
 
         self._main_layout = QtWidgets.QVBoxLayout()
         self._tree_table_layout = QtWidgets.QHBoxLayout()
@@ -945,9 +947,17 @@ class ProcessingPage(QtWidgets.QWizardPage):
     def _update_progress_bar(self, value):
         self._progress_bar.setValue(value)
 
+    @QtCore.pyqtSlot(str)
+    def _update_text_box(self, value):
+        if "Error" in value:
+            self._log_view.append("""<b><font color="red">{}""".format(value))
+        else:
+            self._log_view.append("<b>{}</b>".format(value))
+
     @QtCore.pyqtSlot()
     def _start_stop_button_clicked(self):
-        self._mp4box.remux("/Users/Oton/Downloads/The Postman (Unabridged) Part 1.m4a")
+        #self._mp4box.remux("/Users/Oton/Downloads/The Postman (Unabridged) Part 1.m4a")
+        self._mp4box.remux(r"D:\Downloads\_ab\Aurora CV-01 Frontiers Saga, Book 1 (Unabridged)_done aac100.m4a")
 
     def initializePage(self):
         self._parse_metadata()
