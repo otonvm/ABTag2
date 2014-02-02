@@ -25,6 +25,37 @@ logger.addHandler(stream)
 debug = logger.debug
 
 
+class Test(QtCore.QThread):
+    retcode = QtCore.pyqtSignal([int], [str])
+
+    def __init__(self, bin_path, parent=None):
+        super().__init__(parent)
+        debug("initialized Test")
+
+        self._bin_path = bin_path
+        self._cmd = self._cmd = [self._bin_path, "-h", "general"]
+
+    def __del__(self):
+        self.wait()
+
+    def run(self):
+        with subprocess.Popen(self._cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as popen:
+            try:
+                stderr, stdout = popen.communicate(timeout=2)
+                debug("subprocess stderr: %s, stdout %s", stderr, stdout)
+
+                retcode = popen.returncode
+                debug("subprocess returncode: %s", retcode)
+
+                self.retcode.emit(retcode)
+
+            except subprocess.TimeoutExpired:
+                popen.kill()
+                popen.wait()
+
+                self.retcode.emit("timeout")
+
+
 class MP4BoxError(Exception):
     def __init__(self, msg):
         super().__init__(msg)
@@ -54,23 +85,19 @@ class MP4Box:
             self._cmd = [self._bin_path, "-h", "general"]
             debug("testing with _cmd: %s", self._cmd)
 
-            with subprocess.Popen(self._cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as popen:
-                try:
-                    stderr, stdout = popen.communicate(timeout=2)
-                    debug("subprocess stderr: %s, stdout %s", stderr, stdout)
+            test_thread = Test(self._cmd)
+            signal = test_thread.retcode.signal
 
-                    retcode = popen.returncode
-                    debug("subprocess returncode: %s", retcode)
+            if isinstance(signal, int):
+                if signal != 0:
+                    raise MP4BoxError("error code: {}".format(signal))
+                else:
+                    return
+            else:
+                raise MP4BoxError("error: {}".format(signal))
 
-                    if retcode != 0:
-                        raise subprocess.SubprocessError("error running MP4Box: <code {}>".format(retcode)) from None
-                except subprocess.TimeoutExpired:
-                    popen.kill()
-                    popen.wait()
-                    raise subprocess.SubprocessError("error running MP4Box: <timeout>") from None
         else:
             raise MP4BoxError("cannot find {}".format(self._bin_path))
-        return
 
     @staticmethod
     def _delete(file):
@@ -142,46 +169,42 @@ class MP4Box:
         try:
             proc = subprocess.Popen(self._cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
 
-            if display_progress:
-                self._progress_bar = None
-                self._progress_bar_init(width=bar_width)
-                print()
-                print("Remuxing file:")
-                print("-" * bar_width)
+            imported = False
+            while not imported and proc.poll() != 0:
+                line = proc.stderr.read(47).decode('utf-8')
+                debug("line %s", line)
 
-                imported = False
-                while not imported and proc.poll() != 0:
-                    line = proc.stderr.read(47).decode('utf-8')
+                if line:
+                    if "Error" in line:
+                        output = proc.stderr.readline().decode('utf-8').strip()
+                        error = output.split(': ')[1]
+                        raise MP4BoxError(error)
 
-                    if line:
-                        if "Error" in line:
-                            output = proc.stderr.readline().decode('utf-8').strip()
-                            error = output.split(': ')[1]
-                            raise lib_exceptions.MP4BoxError(error)
+                    try:
+                        line_slice = line[start_index:stop_index]
+                        debug("line_slice %s", line_slice)
 
-                        try:
-                            number = int(line[start_index:stop_index])
-                            if number >= 0 and number < 95:
-                                self._progress_bar_update(number)
-                            #hack for ignoring remuxing phase
-                            #it's usually so fast that it doesn't really matter
-                            elif number >= 95:
-                                self._progress_bar_update(100)
-                                imported = True  # break the while loop
-                            else:
-                                self._progress_bar_update(0)
-                        except ValueError:
-                            pass
-                    else:
-                        self._progress_bar_update(100)
-                proc.communicate()  # needed to deblock the process
-                return proc.wait()
-            else:
-                output = proc.communicate()[1].decode('utf-8').strip()
-                if "Error" in output:
-                    error = output.split(': ')[1]
-                    raise lib_exceptions.MP4BoxError(error)
-                return proc.wait()
+                        number = int(line_slice)
+                        debug("number %s", number)
+
+                        if number >= 0 and number < 95:
+                            self._position_emit(number)
+
+                        #hack for ignoring remuxing phase
+                        #it's usually so fast that it doesn't really matter
+                        elif number >= 95:
+                            self._position_emit(100)
+                            imported = True  # break the while loop
+
+                        else:
+                            self._position_emit(0)
+
+                    except ValueError:
+                        pass
+                else:
+                    self._position_emit(100)
+            proc.communicate()  # needed to deblock the process
+            return proc.wait()
         except:
             raise
 

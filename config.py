@@ -7,6 +7,8 @@ class Config:
     def __init__(self):
         self._verbose = False
         self._input_folder = None
+        self._mp4box = ""
+        self._atomicparsley = ""
         self._cover = None
         self._audio_files = []
         self._url = None
@@ -35,6 +37,20 @@ class Config:
     @input_folder.setter
     def input_folder(self, value):
         self._input_folder = value
+
+    @property
+    def mp4box(self):
+        return self._mp4box
+    @mp4box.setter
+    def mp4box(self, value):
+        self._mp4box = value
+
+    @property
+    def atomicparsley(self):
+        return self._atomicparsley
+    @atomicparsley.setter
+    def atomicparsley(self, value):
+        self._atomicparsley = value
 
     @property
     def cover(self):
