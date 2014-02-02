@@ -27,13 +27,13 @@ logger.addHandler(stream)
 debug = logger.debug
 
 
-class Runner(QtCore.QThread):
+class Test(QtCore.QThread):
     retcode = QtCore.pyqtSignal(int)
     error = QtCore.pyqtSignal(str)
 
     def __init__(self, bin_path, parent=None):
         super().__init__(parent)
-        debug("initialized Runner")
+        debug("initialized Test")
 
         self._bin_path = bin_path
         self._cmd = []
@@ -54,11 +54,80 @@ class Runner(QtCore.QThread):
             retcode = popen.returncode
             debug("subprocess returncode: %s", retcode)
 
-            self.retcode.emit(retcode)
-
+            if retcode != 0:
+                self.retcode.emit(retcode)
 
         except subprocess.TimeoutExpired:
             self.error.emit("timeout")
+
+
+class Demux(QtCore.QThread):
+    retcode = QtCore.pyqtSignal(int)
+    error = QtCore.pyqtSignal(str)
+    progress = QtCore.pyqtSignal([int], [str])
+
+    def __init__(self, bin_path, parent=None):
+        super().__init__(parent)
+        debug("initialized Demux")
+
+        self._bin_path = bin_path
+        self._cmd = []
+
+    def demux(self, file, aac_file):
+        self._cmd = [self._bin_path, "-raw", "1", file, "-out", aac_file]
+
+        self._delete(aac_file)
+
+        self.run()
+
+    @staticmethod
+    def _delete(file):
+        try:
+            os.remove(file)
+        except OSError:
+            pass
+
+    def run(self):
+        debug("running cmd: %s", self._cmd)
+
+        if platform.system() == "Windows":
+            start_index = 15
+            stop_index = 17
+        else:
+            start_index = 14
+            stop_index = 16
+
+        try:
+            proc = subprocess.Popen(self._cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+            while proc.poll() != 0:
+                line = proc.stderr.read(46).decode('utf-8')
+                debug("line: %s", line)
+
+                if line:
+                    if "Error" in line:
+                        output = proc.stderr.readline().decode('utf-8').strip()
+                        error = output.split(': ')[1]
+                        self.error.emit(error)
+
+                    try:
+                        line_slice = line[start_index:stop_index]
+                        debug("line_slice: %s", line_slice)
+
+                        number = int(line_slice)
+                        debug("number: %s", number)
+
+                        if number >= 0:
+                            self.progress.emit(number)
+                        else:
+                            self.progress.emit(0)
+                    except ValueError:
+                        pass
+                else:
+                    self.progress.emit(100)
+                    self.progress.emit("done")
+            self.retcode.emit(proc.poll())
+        except Exception as err:
+            self.error.emit(err)
 
 
 class MP4BoxError(Exception):
@@ -68,8 +137,9 @@ class MP4BoxError(Exception):
 
 
 class MP4Box(QtCore.QObject):
-    progress_changed = QtCore.pyqtSignal(int)
-    error = QtCore.pyqtSignal(str, int)
+    retcode = QtCore.pyqtSignal(int)
+    error = QtCore.pyqtSignal(str)
+    progress = QtCore.pyqtSignal(int)
 
     def __init__(self, bin_path):
         super().__init__(None)
@@ -85,13 +155,16 @@ class MP4Box(QtCore.QObject):
         self._m4b_file = ""
         self._position = 0
 
-        self._runner = Runner(self._bin_path)
-        self._runner.retcode.connect(self._mp4box_retcode)
-        self._runner.error.connect(self._mp4box_retcode)
+        self._test = Test(self._bin_path)
+        self._test.retcode.connect(self._retcode)
+        self._test.error.connect(self._error)
 
-        self._test_bin()
+        self._demux = Demux(self._bin_path)
+        self._demux.retcode.connect(self._retcode_silent)
+        self._demux.error.connect(self._error_silent)
+        self._demux.progress.connect(self._progress)
 
-    def _test_bin(self):
+    def test(self):
         debug("testing %s", self._bin_path)
 
         if self._tools.path_exists(self._bin_path):
@@ -99,77 +172,36 @@ class MP4Box(QtCore.QObject):
                 debug("%s is not executable", self._bin_path)
                 os.chmod(self._bin_path, stat.S_IXUSR | stat.S_IXGRP)
 
-            self._runner.test()
+            self._test.test()
 
         else:
-            self.error("cannot find mp4box binary", -1)
+            self._error("cannot find mp4box binary")
+
+    @QtCore.pyqtSlot(int)
+    def _retcode(self, code):
+        debug("got returncode: %s", code)
+
+        self.retcode.emit(code)
+
+    @QtCore.pyqtSlot(int)
+    def _retcode_silent(self, code):
+        debug("got returncode: %s", code)
 
     @QtCore.pyqtSlot(str)
+    def _error(self, msg):
+        debug("got error: %s", msg)
+
+        self.error.emit(msg)
+
+    @QtCore.pyqtSlot(str)
+    def _error_silent(self, msg):
+        debug("got error: %s", msg)
+
     @QtCore.pyqtSlot(int)
-    def _mp4box_retcode(self, retcode):
-        debug("mp4box retcode: %s", retcode)
+    def _progress(self, progress):
+        debug("got progress no: %s", progress)
 
-        if isinstance(retcode, int):
-            if retcode != 0:
-                self.error.emit("error running mp4box", retcode)
-            else:
-                return
-        else:
-            raise MP4BoxError("error: {}".format(self._signal))
-
-    @staticmethod
-    def _delete(file):
-        try:
-            os.remove(file)
-        except OSError:
-            pass
-
-    def _position_emit(self, position):
-        self.progress_changed.emit(position)
-
-    def _demux(self, file):
-        if platform.system() == "Windows":
-            start_index = 15
-            stop_index = 17
-        else:
-            start_index = 14
-            stop_index = 16
-
-        self._delete(self._aac_file)
-
-        self._cmd = [self._bin_path, "-raw", "1", file, "-out", self._aac_file]
-
-        try:
-            proc = subprocess.Popen(self._cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
-            while proc.poll() != 0:
-                line = proc.stderr.read(46).decode('utf-8')
-                debug("line: %s", line)
-
-                if line:
-                    if "Error" in line:
-                        output = proc.stderr.readline().decode('utf-8').strip()
-                        error = output.split(': ')[1]
-                        raise MP4BoxError(error)
-
-                    try:
-                        line_slice = line[start_index:stop_index]
-                        debug("line_slice: %s", line_slice)
-
-                        number = int(line_slice)
-                        debug("number: %s", number)
-
-                        if number >= 0:
-                            self._position_emit(number)
-                        else:
-                            self._position_emit(0)
-                    except ValueError:
-                        pass
-                else:
-                    self._position_emit(100)
-                    return
-            return proc.poll()
-        except:
-            raise
+        self.progress.emit(progress)
 
     def _remux(self, part_no):
         if platform.system() == "Windows":
@@ -236,6 +268,10 @@ class MP4Box(QtCore.QObject):
         self._aac_file = r"{}_demux.aac".format(os.path.join(self._file_path, self._file_name))
         self._m4b_file = r"{}_temp.m4b".format(os.path.join(self._file_path, self._file_name))
 
+        self._demux.demux(file, self._aac_file)
+
+
+        """
         if self._demux(file) == 0:
             if self._remux(part_no) == 0:
                 self._delete(self._aac_file)
@@ -247,4 +283,4 @@ class MP4Box(QtCore.QObject):
         else:
             self._delete(self._aac_file)
             self._delete(self._m4b_file)
-            return False
+            return False"""

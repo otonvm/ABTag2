@@ -36,7 +36,7 @@ class Wizard(QtWidgets.QWizard):
     ProcessingPage = 2
 
     def __init__(self, config, parent=None):
-        super(Wizard, self).__init__(parent)
+        super().__init__(parent)
         debug("instantiated Wizard class")
 
         if not isinstance(config, Config):
@@ -47,15 +47,10 @@ class Wizard(QtWidgets.QWizard):
         self.setWindowFlags(QtCore.Qt.MSWindowsFixedSizeDialogHint)
 
         self.mp4box = MP4Box(config.mp4box)
-        self.warning = QtWidgets.QMessageBox(self)
 
-        self.warning.setWindowTitle("Warning")
-
-
-        def show_warn(string):
-            self.warning.setText(string)
-            self.warning.show()
-        self.mp4box.error.connect(show_warn)
+        self._dialog = QtWidgets.QMessageBox(self)
+        self.mp4box.retcode.connect(self._error_dialog)
+        self.mp4box.error.connect(self._error_dialog)
 
         self.setPage(self.PathPage, PathPage(config))
         self.setPage(self.URLPage, URLPage(config))
@@ -65,6 +60,19 @@ class Wizard(QtWidgets.QWizard):
         QtWidgets.QShortcut(QtGui.QKeySequence("Ctrl+Q"), self, self.close)
         QtWidgets.QShortcut(QtGui.QKeySequence("Ctrl+W"), self, self.close)
 
+        self.mp4box.test()
+
+    @QtCore.pyqtSlot(str)
+    @QtCore.pyqtSlot(int)
+    def _error_dialog(self, value):
+        self._dialog.setWindowTitle("Error")
+        if isinstance(value, int):
+            self._dialog.setText("Return Code: {}".format(value))
+        else:
+            self._dialog.setText(value)
+        self._dialog.exec()
+
+    def imports(self):
         import inspect
         for name in dir(self):
             obj = getattr(self, name)
@@ -320,7 +328,6 @@ class PathPage(QtWidgets.QWizardPage):
         return True
 
     def initializePage(self):
-        print("start")
         self._get_files()
         self._update_path_line()
         self._update_tree()
@@ -352,7 +359,7 @@ class URLPage(QtWidgets.QWizardPage):
 
         self.setTitle("URL")
         self.setSubTitle("Enter an audible url that points to the metadata of your book.")
-        self.setStyleSheet("QLineEdit QPlainTextEdit %s")
+        self.setStyleSheet("")
 
         #add widgets:
         #some widgets are connected to slots that validate their contents,
@@ -776,6 +783,9 @@ class ProcessingPage(QtWidgets.QWizardPage):
         self.setTitle("Processing")
         self.setSubTitle("Review the data that will be used for tagging each file. When ready click Start.")
 
+        self._mp4box = MP4Box(config.mp4box)
+        self._mp4box.progress.connect(self._update_progress_bar)
+
         self._main_layout = QtWidgets.QVBoxLayout()
         self._tree_table_layout = QtWidgets.QHBoxLayout()
         self._progress_layout = QtWidgets.QHBoxLayout()
@@ -931,9 +941,13 @@ class ProcessingPage(QtWidgets.QWizardPage):
             self._database.update({audio_file: audio_file_data})
         return
 
+    @QtCore.pyqtSlot(int)
+    def _update_progress_bar(self, value):
+        self._progress_bar.setValue(value)
+
     @QtCore.pyqtSlot()
     def _start_stop_button_clicked(self):
-        pass
+        self._mp4box.remux("/Users/Oton/Downloads/The Postman (Unabridged) Part 1.m4a")
 
     def initializePage(self):
         self._parse_metadata()
