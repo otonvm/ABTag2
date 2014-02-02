@@ -27,16 +27,20 @@ logger.addHandler(stream)
 debug = logger.debug
 
 
-class Test(QtCore.QThread):
+class Runner(QtCore.QThread):
     retcode = QtCore.pyqtSignal(int)
     error = QtCore.pyqtSignal(str)
 
     def __init__(self, bin_path, parent=None):
-        super(Test, self).__init__(parent)
-        debug("initialized Test")
+        super().__init__(parent)
+        debug("initialized Runner")
 
         self._bin_path = bin_path
-        self._cmd = [self._bin_path, "-rh", "general"]
+        self._cmd = []
+
+    def test(self):
+        self._cmd = [self._bin_path, "-h", "general"]
+        self.run()
 
     def run(self):
         debug("testing with cmd: %s", self._cmd)
@@ -51,7 +55,7 @@ class Test(QtCore.QThread):
             debug("subprocess returncode: %s", retcode)
 
             self.retcode.emit(retcode)
-            print("here")
+
 
         except subprocess.TimeoutExpired:
             self.error.emit("timeout")
@@ -65,7 +69,7 @@ class MP4BoxError(Exception):
 
 class MP4Box(QtCore.QObject):
     progress_changed = QtCore.pyqtSignal(int)
-    error = QtCore.pyqtSignal(str)
+    error = QtCore.pyqtSignal(str, int)
 
     def __init__(self, bin_path):
         super().__init__(None)
@@ -81,9 +85,9 @@ class MP4Box(QtCore.QObject):
         self._m4b_file = ""
         self._position = 0
 
-        self._test_thread = Test(self._bin_path)
-        self._test_thread.retcode.connect(self._mp4box_retcode)
-        self._test_thread.error.connect(self._mp4box_retcode)
+        self._runner = Runner(self._bin_path)
+        self._runner.retcode.connect(self._mp4box_retcode)
+        self._runner.error.connect(self._mp4box_retcode)
 
         self._test_bin()
 
@@ -95,11 +99,10 @@ class MP4Box(QtCore.QObject):
                 debug("%s is not executable", self._bin_path)
                 os.chmod(self._bin_path, stat.S_IXUSR | stat.S_IXGRP)
 
-            self._test_thread.start()
-            self._test_thread.wait()
+            self._runner.test()
 
         else:
-            raise MP4BoxError("cannot find {}".format(self._bin_path))
+            self.error("cannot find mp4box binary", -1)
 
     @QtCore.pyqtSlot(str)
     @QtCore.pyqtSlot(int)
@@ -108,7 +111,7 @@ class MP4Box(QtCore.QObject):
 
         if isinstance(retcode, int):
             if retcode != 0:
-                self.error.emit("error code: {}".format(retcode))
+                self.error.emit("error running mp4box", retcode)
             else:
                 return
         else:
