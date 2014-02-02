@@ -40,7 +40,7 @@ class Test(QtCore.QThread):
 
     def test(self):
         self._cmd = [self._bin_path, "-h", "general"]
-        self.run()
+        self.start()
 
     def run(self):
         debug("testing with cmd: %s", self._cmd)
@@ -78,7 +78,7 @@ class Demux(QtCore.QThread):
 
         self._delete(aac_file)
 
-        self.run()
+        self.start()
 
     @staticmethod
     def _delete(file):
