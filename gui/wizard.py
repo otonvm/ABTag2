@@ -771,15 +771,16 @@ class ProcessingPage(QtWidgets.QWizardPage):
         self._files_tree = QtWidgets.QTreeView()
         self._data_table = QtWidgets.QTableWidget()
         self._data_model = QtGui.QStandardItemModel()
-        self._log_view = QtWidgets.QPlainTextEdit()
+        self._log_view = QtWidgets.QTextEdit()
         self._progress_bar = QtWidgets.QProgressBar()
         self._start_stop_button = QtWidgets.QPushButton()
 
         self._database = None
 
     def _setup_widgets(self):
-        self._log_view.setMaximumHeight(200)
+        self._log_view.setMaximumHeight(100)
         self._log_view.setStyleSheet("font-size: 10;")
+
         self._setup_files_tree()
         self._setup_data_table()
 
@@ -921,6 +922,7 @@ class ProcessingPage(QtWidgets.QWizardPage):
     @QtCore.pyqtSlot()
     def _start_stop_button_clicked(self):
         pass
+
     def initializePage(self):
         self._parse_metadata()
         self._setup_layout()
