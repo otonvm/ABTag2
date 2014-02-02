@@ -63,10 +63,12 @@ class MP4BoxError(Exception):
         self.msg = msg
 
 
-class MP4Box:
+class MP4Box(QtCore.QObject):
     progress_changed = QtCore.pyqtSignal(int)
+    error = QtCore.pyqtSignal(str)
 
     def __init__(self, bin_path):
+        super().__init__(None)
         self._tools = Tools()
         self._bin_path = self._tools.real_path(bin_path)
         debug("_bin_path realpath: %s", self._bin_path)
@@ -106,7 +108,7 @@ class MP4Box:
 
         if isinstance(retcode, int):
             if retcode != 0:
-                raise MP4BoxError("error code: {}".format(self._signal))
+                self.error.emit("error code: {}".format(retcode))
             else:
                 return
         else:

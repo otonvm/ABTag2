@@ -47,6 +47,15 @@ class Wizard(QtWidgets.QWizard):
         self.setWindowFlags(QtCore.Qt.MSWindowsFixedSizeDialogHint)
 
         self.mp4box = MP4Box(config.mp4box)
+        self.warning = QtWidgets.QMessageBox(self)
+
+        self.warning.setWindowTitle("Warning")
+
+
+        def show_warn(string):
+            self.warning.setText(string)
+            self.warning.show()
+        self.mp4box.error.connect(show_warn)
 
         self.setPage(self.PathPage, PathPage(config))
         self.setPage(self.URLPage, URLPage(config))
