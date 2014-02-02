@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
 
 import os
+import stat
 import logging
 import subprocess
 import platform
 
 from PyQt5 import QtCore
+from PyQt5 import QtWidgets
 
 from lib.tree import Tools
 
@@ -26,34 +28,33 @@ debug = logger.debug
 
 
 class Test(QtCore.QThread):
-    retcode = QtCore.pyqtSignal([int], [str])
+    retcode = QtCore.pyqtSignal(int)
+    error = QtCore.pyqtSignal(str)
 
     def __init__(self, bin_path, parent=None):
-        super().__init__(parent)
+        super(Test, self).__init__(parent)
         debug("initialized Test")
 
         self._bin_path = bin_path
-        self._cmd = self._cmd = [self._bin_path, "-h", "general"]
-
-    def __del__(self):
-        self.wait()
+        self._cmd = [self._bin_path, "-rh", "general"]
 
     def run(self):
-        with subprocess.Popen(self._cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE) as popen:
-            try:
-                stderr, stdout = popen.communicate(timeout=2)
-                debug("subprocess stderr: %s, stdout %s", stderr, stdout)
+        debug("testing with cmd: %s", self._cmd)
 
-                retcode = popen.returncode
-                debug("subprocess returncode: %s", retcode)
+        try:
+            popen = subprocess.Popen(self._cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
-                self.retcode.emit(retcode)
+            stderr, stdout = popen.communicate(timeout=2)
+            debug("subprocess stderr: %s; stdout: %s", stderr, stdout)
 
-            except subprocess.TimeoutExpired:
-                popen.kill()
-                popen.wait()
+            retcode = popen.returncode
+            debug("subprocess returncode: %s", retcode)
 
-                self.retcode.emit("timeout")
+            self.retcode.emit(retcode)
+            print("here")
+
+        except subprocess.TimeoutExpired:
+            self.error.emit("timeout")
 
 
 class MP4BoxError(Exception):
@@ -66,9 +67,11 @@ class MP4Box:
     progress_changed = QtCore.pyqtSignal(int)
 
     def __init__(self, bin_path):
-        self._bin_path = Tools.real_path(bin_path)
+        self._tools = Tools()
+        self._bin_path = self._tools.real_path(bin_path)
         debug("_bin_path realpath: %s", self._bin_path)
 
+        self._signal = 0
         self._cmd = []
         self._file_path = ""
         self._file_name = ""
@@ -76,28 +79,38 @@ class MP4Box:
         self._m4b_file = ""
         self._position = 0
 
+        self._test_thread = Test(self._bin_path)
+        self._test_thread.retcode.connect(self._mp4box_retcode)
+        self._test_thread.error.connect(self._mp4box_retcode)
+
         self._test_bin()
 
     def _test_bin(self):
-        debug("testing %", self._bin_path)
+        debug("testing %s", self._bin_path)
 
-        if Tools.path_exists(self._bin_path):
-            self._cmd = [self._bin_path, "-h", "general"]
-            debug("testing with _cmd: %s", self._cmd)
+        if self._tools.path_exists(self._bin_path):
+            if not os.access(self._bin_path, os.X_OK):
+                debug("%s is not executable", self._bin_path)
+                os.chmod(self._bin_path, stat.S_IXUSR | stat.S_IXGRP)
 
-            test_thread = Test(self._cmd)
-            signal = test_thread.retcode.signal
-
-            if isinstance(signal, int):
-                if signal != 0:
-                    raise MP4BoxError("error code: {}".format(signal))
-                else:
-                    return
-            else:
-                raise MP4BoxError("error: {}".format(signal))
+            self._test_thread.start()
+            self._test_thread.wait()
 
         else:
             raise MP4BoxError("cannot find {}".format(self._bin_path))
+
+    @QtCore.pyqtSlot(str)
+    @QtCore.pyqtSlot(int)
+    def _mp4box_retcode(self, retcode):
+        debug("mp4box retcode: %s", retcode)
+
+        if isinstance(retcode, int):
+            if retcode != 0:
+                raise MP4BoxError("error code: {}".format(self._signal))
+            else:
+                return
+        else:
+            raise MP4BoxError("error: {}".format(self._signal))
 
     @staticmethod
     def _delete(file):

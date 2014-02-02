@@ -68,22 +68,22 @@ def main():
         logger.setLevel(logging.DEBUG)
         config.verbose = True
 
-    script_path = util.real_path(__name__)
+    script_path = util.real_path(os.path.split(__file__)[0])
     debug("script_path %s", script_path)
+
+    debug("system: %s", platform.system())
 
     if platform.system() == "Windows":
         tools_path = os.path.join(script_path, "tools\win")
         config.mp4box = os.path.join(tools_path, "mp4box.exe")
         config.atomicparsley = os.path.join(tools_path, "AtomicParsley.exe")
     else:
-        tools_path = os.path.join(script_path, "tools\mac")
+        tools_path = os.path.join(script_path, "tools/mac")
         config.mp4box = os.path.join(tools_path, "mp4box")
         config.atomicparsley = os.path.join(tools_path, "AtomicParsley")
     debug("tools_path: %s", tools_path)
     debug("mp4box: %s", config.mp4box)
     debug("atomicparsley: %s", config.atomicparsley)
-
-    config.mp4box = os.path.join(tools_path, "mp4box.exe")
 
     if args.input_folder is not None:
         debug("checking %s", args.input_folder)

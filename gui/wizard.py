@@ -10,6 +10,7 @@ from PyQt5 import QtCore
 from config import Config
 from lib.tree import Parse
 from lib.abparse import Metadata
+from lib.mux import MP4Box
 from gui.resources import Icons
 
 DEBUG = True
@@ -44,6 +45,8 @@ class Wizard(QtWidgets.QWizard):
         self.setModal(True)
         self.setFixedSize(800, 600)
         self.setWindowFlags(QtCore.Qt.MSWindowsFixedSizeDialogHint)
+
+        self.mp4box = MP4Box(config.mp4box)
 
         self.setPage(self.PathPage, PathPage(config))
         self.setPage(self.URLPage, URLPage(config))
