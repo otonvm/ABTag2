@@ -335,8 +335,9 @@ class MP4Box(QtCore.QObject):
     def exit_thread(self):
         #when the signal is recieved launch the function
         #that stops the current_job thread:
-        if hasattr(self._current_job, "exit_thread"):
-            self._current_job.exit_thread()
+        #if hasattr(self._current_job, "exit_thread"):
+        #    self._current_job.exit_thread()
+        self._current_job.terminate()
 
 ##############################################################
 #################        FLOW         ########################
