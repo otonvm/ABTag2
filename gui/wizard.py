@@ -785,8 +785,8 @@ class ProcessingPage(QtWidgets.QWizardPage):
 
         self._mp4box = MP4Box(config.mp4box)
         self._mp4box.progress.connect(self._update_progress_bar)
-        self._mp4box.msg.connect(self._update_text_box)
-        self._mp4box.msg_error.connect(self._update_text_box)
+        self._mp4box.message.connect(self._update_text_box)
+        self._mp4box.error.connect(self._update_text_box)
 
         self._main_layout = QtWidgets.QVBoxLayout()
         self._tree_table_layout = QtWidgets.QHBoxLayout()
@@ -803,7 +803,7 @@ class ProcessingPage(QtWidgets.QWizardPage):
 
     def _setup_widgets(self):
         self._log_view.setMaximumHeight(100)
-        self._log_view.setStyleSheet("font-size: 10;")
+        self._log_view.setStyleSheet("font-size: 8;")
 
         self._setup_files_tree()
         self._setup_data_table()
@@ -956,8 +956,10 @@ class ProcessingPage(QtWidgets.QWizardPage):
 
     @QtCore.pyqtSlot()
     def _start_stop_button_clicked(self):
-        #self._mp4box.remux("/Users/Oton/Downloads/The Postman (Unabridged) Part 1.m4a")
-        self._mp4box.remux(r"D:\Downloads\_ab\Aurora CV-01 Frontiers Saga, Book 1 (Unabridged)_done aac100.m4a")
+        self._start_stop_button.setText("Stop")
+        self._start_stop_button.clicked.connect(self._mp4box.exit_thread)
+        self._mp4box.remux("/Users/Oton/Downloads/The Postman (Unabridged) Part 1.m4a")
+        #self._mp4box.remux(r"D:\Downloads\_ab\Aurora CV-01 Frontiers Saga, Book 1 (Unabridged)_done aac100.m4a")
 
     def initializePage(self):
         self._parse_metadata()

@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import os
+import io
 import stat
 import logging
 import subprocess
@@ -64,77 +65,164 @@ class Test(QtCore.QThread):
 class Demux(QtCore.QThread):
     retcode = QtCore.pyqtSignal(int)
     error = QtCore.pyqtSignal(str)
-    progress = QtCore.pyqtSignal([int], [str])
+    progress = QtCore.pyqtSignal(int)
+    status = QtCore.pyqtSignal(str)
 
     def __init__(self, bin_path, parent=None):
         super().__init__(parent)
         debug("initialized Demux")
 
+        self._proc = None
+        self._poll = None
         self._bin_path = bin_path
         self._cmd = []
 
     def demux(self, file, aac_file):
         self._cmd = [self._bin_path, "-raw", "1", file, "-out", aac_file]
 
-        self._delete(aac_file)
+        MP4Box.delete(aac_file)
 
         self.start()
 
-    @staticmethod
-    def _delete(file):
+    def exit_thread(self):
+        if self._poll is not None:
+            self._proc.kill()
+        #MP4Box.delete(aac_file)
+
+    def _subproc(self):
         try:
-            os.remove(file)
-        except OSError:
-            pass
+            self._proc = subprocess.Popen(self._cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=1)
+            for line in io.open(self._proc.stderr.fileno()):
+                yield line.strip()
+        except subprocess.SubprocessError as err:
+            self.error.emit(err)
 
     def run(self):
         debug("running cmd: %s", self._cmd)
 
-        if platform.system() == "Windows":
-            start_index = 15
-            stop_index = 17
+        stderr_line = ""
+
+        self.status.emit("Media Export")
+        while self._poll is None:
+            for line in self._subproc():
+                #store line in case needed:
+                stderr_line = line
+                debug("demux current line: %s", line)
+
+                line_slice = line[38:40].strip()
+                if line_slice:
+                    self.progress.emit(int(line_slice))
+
+                #check if process still exists:
+                self._poll = self._proc.poll()
+        #process ended:
         else:
-            start_index = 14
-            stop_index = 16
+            #emit returncode
+            self.retcode.emit(self._poll)
+            debug("demux returncode: %s", self._poll)
 
+            #if there was an error we emit the last line:
+            if self._poll != 0:
+                self.error.emit(stderr_line)
+                debug("demux last line: %s", stderr_line)
+            else:
+                #or the finished signal:
+                self.finished.emit()
+                self._proc = None
+                self._poll = None
+
+
+class Remux(QtCore.QThread):
+    retcode = QtCore.pyqtSignal(int)
+    error = QtCore.pyqtSignal(str)
+    progress = QtCore.pyqtSignal(int)
+    status = QtCore.pyqtSignal(str)
+
+    def __init__(self, bin_path, parent=None):
+        super().__init__(parent)
+        debug("initialized Demux")
+
+        self._proc = None
+        self._poll = None
+        self._job_cache = []
+        self._bin_path = bin_path
+        self._cmd = []
+
+    def remux(self, aac_file, m4b_file, part_no):
+        self._cmd = [self._bin_path, "-brand", "M4B ", "-ab", "mp71", "-ipod", "-add",
+                     "{}:name=Part {}:lang=eng".format(aac_file, part_no), m4b_file]
+
+        MP4Box.delete(m4b_file)
+
+        self.start()
+
+    def exit_thread(self):
+        if self._poll is not None:
+            self._proc.kill()
+
+    def _emit_job(self, job):
+        #check if the job has already been emitted:
+        if job in self._job_cache:
+            pass
+        else:
+            #if not emit it and add it to the cache:
+            self.status.emit(job)
+            self._job_cache.append(job)
+
+    def _subproc(self):
         try:
-            proc = subprocess.Popen(self._cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
-            while proc.poll() != 0:
-                line = proc.stderr.read(46).decode('utf-8')
-                debug("line: %s", line)
-
-                if line:
-                    if "Error" in line:
-                        output = proc.stderr.readline().decode('utf-8').strip()
-                        error = output.split(': ')[1]
-                        self.error.emit(error)
-
-                    try:
-                        line_slice = line[start_index:stop_index]
-                        debug("line_slice: %s", line_slice)
-
-                        number = int(line_slice)
-                        debug("number: %s", number)
-
-                        if number >= 0:
-                            self.progress.emit(number)
-                        else:
-                            self.progress.emit(0)
-                    except ValueError:
-                        pass
-                else:
-                    print("HERE")
-                    self.progress.emit(100)
-                    self.progress.emit("done")
-            self.retcode.emit(proc.poll())
-        except Exception as err:
+            self._proc = subprocess.Popen(self._cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=1)
+            for line in io.open(self._proc.stderr.fileno()):
+                yield line.strip()
+        except subprocess.SubprocessError as err:
             self.error.emit(err)
 
+    def run(self):
+        debug("running cmd: %s", self._cmd)
 
-class MP4BoxError(Exception):
-    def __init__(self, msg):
-        super().__init__(msg)
-        self.msg = msg
+        stderr_line = ""
+
+        #if the process is running:
+        while self._poll is None:
+            for line in self._subproc():
+                #store the line if needed
+                stderr_line = line
+                debug("remux current line: %s", line)
+
+                #first operation:
+                if "Importing AAC" in line:
+                    #emit the current job:
+                    self._emit_job("Importing AAC")
+
+                    line_slice = line[39:41].strip()
+                    if line_slice:
+                        self.progress.emit(int(line_slice))
+
+                #second operation:
+                elif "ISO File Writing" in line:
+                    self._emit_job("ISO File Writing")
+
+                    line_slice = line[42:44].strip()
+                    if line_slice:
+                        self.progress.emit(int(line_slice))
+
+                #check if process still exists:
+                self._poll = self._proc.poll()
+        #process ended:
+        else:
+            #emit returncode
+            self.retcode.emit(self._poll)
+            debug("remux returncode: %s", self._poll)
+
+            #emit the last line if there was an error:
+            if self._poll != 0:
+                self.error.emit(stderr_line)
+                debug("remux last line: %s", stderr_line)
+            else:
+                #or the finished signal:
+                self.finished.emit()
+                self._proc = None
+                self._poll = None
 
 
 class MP4Box(QtCore.QObject):
@@ -142,8 +230,7 @@ class MP4Box(QtCore.QObject):
     error = QtCore.pyqtSignal(str)
     progress = QtCore.pyqtSignal(int)
     finished = QtCore.pyqtSignal()
-    msg = QtCore.pyqtSignal(str)
-    msg_error = QtCore.pyqtSignal(str)
+    message = QtCore.pyqtSignal(str)
 
     def __init__(self, bin_path):
         super().__init__(None)
@@ -161,15 +248,41 @@ class MP4Box(QtCore.QObject):
         self._returncode = 0
         self._error_msg = ""
         self._status = ""
+        self._part_no = 0
+        self._current_job = None
 
         self._test = Test(self._bin_path)
-        self._test.retcode.connect(self._recieve_emit_retcode)
-        self._test.error.connect(self._recieve_emit_error)
+        self._test.retcode.connect(self._recieve_retcode)
+        self._test.error.connect(self._recieve_error)
 
+        #setup demux thread:
         self._demux = Demux(self._bin_path)
+        #recieve and process returncode, error and status messages:
         self._demux.retcode.connect(self._recieve_retcode)
         self._demux.error.connect(self._recieve_error)
+        self._demux.status.connect(self._recieve_status)
+        #passthrough progress status:
         self._demux.progress.connect(self._emit_progress)
+        #control flow:
+        self._demux.finished.connect(self._launch_remux_thread)
+
+        #setup remux thread:
+        self._remux = Remux(self._bin_path)
+        #recieve and process returncode, error and status messages:
+        self._remux.retcode.connect(self._recieve_retcode)
+        self._remux.error.connect(self._recieve_error)
+        self._remux.status.connect(self._recieve_status)
+        #passthrough progress status:
+        self._remux.progress.connect(self._emit_progress)
+        #control flow:
+        self._remux.finished.connect(self._finish_cleanup)
+
+    @staticmethod
+    def delete(file):
+        try:
+            os.remove(file)
+        except OSError:
+            pass
 
     def test(self):
         debug("testing %s", self._bin_path)
@@ -184,124 +297,92 @@ class MP4Box(QtCore.QObject):
         else:
             self._error("cannot find mp4box binary")
 
-    @QtCore.pyqtSlot(int)
-    def _recieve_emit_retcode(self, code):
-        debug("got returncode signal: %s", code)
-
-        self.retcode.emit(code)
-
-    @QtCore.pyqtSlot(int)
-    def _recieve_retcode(self, code):
-        debug("got returncode signal: %s", code)
-
-        self._returncode = code
-
-    @QtCore.pyqtSlot(str)
-    def _recieve_emit_error(self, msg):
-        debug("got error signal: %s", msg)
-
-        self.error.emit(msg)
-
+##############################################################
+#################       SIGNALS       ########################
+##############################################################
     def _emit_error(self, msg):
         debug("got error signal: %s", msg)
-
         self.msg_error.emit("Error: {}".format(msg))
+
+##############################################################
+#################        SLOTS        ########################
+##############################################################
+    @QtCore.pyqtSlot(int)
+    def _recieve_retcode(self, code):
+        #recieve and emit returncode:
+        debug("got returncode signal: %s", code)
+        self.retcode.emit(code)
 
     @QtCore.pyqtSlot(str)
     def _recieve_error(self, msg):
+        #recieve and process error messages:
         debug("got error signal: %s", msg)
+        self.error.emit("Error: {}".format(msg))
 
-        self._error_msg = msg
+    @QtCore.pyqtSlot(str)
+    def _recieve_status(self, msg):
+        #recieve and store status messages:
+        debug("got status signal: %s", msg)
+        self.message.emit(msg)
 
     @QtCore.pyqtSlot(int)
-    @QtCore.pyqtSlot(str)
     def _emit_progress(self, progress):
+        #passthrough progress status:
         debug("got progress signal: %s", progress)
+        self.progress.emit(progress)
 
-        if isinstance(progress, int):
-            self.progress.emit(progress)
-        else:
-            self._status = progress
+    @QtCore.pyqtSlot()
+    def exit_thread(self):
+        #when the signal is recieved launch the function
+        #that stops the current_job thread:
+        if hasattr(self._current_job, "exit_thread"):
+            self._current_job.exit_thread()
 
-    def _emit_message(self, msg):
-        debug("emitting message: %s", msg)
-
-        self.msg.emit(msg)
-
-    def _remux(self, part_no):
-        if platform.system() == "Windows":
-            start_index = 10
-            stop_index = 12
-        else:
-            start_index = 9
-            stop_index = 11
-
-        self._delete(self._m4b_file)
-
-        self._cmd = [self._bin_path, "-brand", "M4B ", "-ab", "mp71", "-ipod", "-add",
-                     "{}:name=Part {}:lang=eng".format(self._aac_file, part_no), self._m4b_file]
-
-        try:
-            proc = subprocess.Popen(self._cmd, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
-
-            imported = False
-            while not imported and proc.poll() != 0:
-                line = proc.stderr.read(47).decode('utf-8')
-                debug("line %s", line)
-
-                if line:
-                    if "Error" in line:
-                        output = proc.stderr.readline().decode('utf-8').strip()
-                        error = output.split(': ')[1]
-                        raise MP4BoxError(error)
-
-                    try:
-                        line_slice = line[start_index:stop_index]
-                        debug("line_slice %s", line_slice)
-
-                        number = int(line_slice)
-                        debug("number %s", number)
-
-                        if number >= 0 and number < 95:
-                            self._position_emit(number)
-
-                        #hack for ignoring remuxing phase
-                        #it's usually so fast that it doesn't really matter
-                        elif number >= 95:
-                            self._position_emit(100)
-                            imported = True  # break the while loop
-
-                        else:
-                            self._position_emit(0)
-
-                    except ValueError:
-                        pass
-                else:
-                    self._position_emit(100)
-            proc.communicate()  # needed to deblock the process
-            return proc.wait()
-        except:
-            raise
-
+##############################################################
+#################        FLOW         ########################
+##############################################################
     def remux(self, file, part_no=1):
         if not isinstance(part_no, int):
             raise TypeError("part_no must be of type int")
+        else:
+            self._part_no = part_no
 
+        #setup paths and file names for files:
         self._file_path, self._file_name = os.path.split(file)
         self._file_name = os.path.splitext(self._file_name)[0]
 
         self._aac_file = r"{}_demux.aac".format(os.path.join(self._file_path, self._file_name))
         self._m4b_file = r"{}_temp.m4b".format(os.path.join(self._file_path, self._file_name))
 
-        self._emit_message("Demuxing file {}".format(file))
+        #start the demux thread:
+        self.message.emit("Demuxing file {}".format(file))
+        self._launch_demux_thread(file)
+
+    def _launch_demux_thread(self, file):
+        #start the demux thread:
         self._demux.demux(file, self._aac_file)
+        #set current job to point to the current thread:
+        self._current_job = self._demux
 
-        if self._status == "done":
-            if self._returncode != 0:
-                self._emit_error(self._error_msg)
-            else:
-                self._emit_error("test")
-                self._emit_message("Created file: {}".format(self._aac_file))
-                self._emit_message("Remuxing to file: {}".format(self._m4b_file))
+    @QtCore.pyqtSlot()
+    def _launch_remux_thread(self):
+        #when the demux thread emits the finished signal
+        #start the remux thread:
+        self.message.emit("Created file: {}".format(self._aac_file))
+        self.message.emit("Remuxing to file: {}".format(self._m4b_file))
 
+        self._remux.remux(self._aac_file, self._m4b_file, self._part_no)
 
+        #set current job to point to the current thread:
+        self._current_job = self._remux
+
+    @QtCore.pyqtSlot()
+    def _finish_cleanup(self):
+        #when the remux thread emits the finished signal
+        #perform the final cleanups and emit the main
+        #finished signal for this module:
+        self.message.emit("Created file: {}".format(self._m4b_file))
+
+        self.delete(self._aac_file)
+
+        self.finished.emit()
