@@ -46,11 +46,10 @@ class Wizard(QtWidgets.QWizard):
         self.setFixedSize(800, 600)
         self.setWindowFlags(QtCore.Qt.MSWindowsFixedSizeDialogHint)
 
-        self.mp4box = MP4Box(config.mp4box)
+        #self.mp4box = MP4Box(config.mp4box)
 
-        self._dialog = QtWidgets.QMessageBox(self)
-        self.mp4box.retcode.connect(self._error_dialog)
-        self.mp4box.error.connect(self._error_dialog)
+        #self._dialog = QtWidgets.QMessageBox(self)
+        #self.mp4box.error.connect(self._error_dialog)
 
         self.setPage(self.PathPage, PathPage(config))
         self.setPage(self.URLPage, URLPage(config))
@@ -60,7 +59,7 @@ class Wizard(QtWidgets.QWizard):
         QtWidgets.QShortcut(QtGui.QKeySequence("Ctrl+Q"), self, self.close)
         QtWidgets.QShortcut(QtGui.QKeySequence("Ctrl+W"), self, self.close)
 
-        self.mp4box.test()
+        #self.mp4box.test()
 
     @QtCore.pyqtSlot(str)
     @QtCore.pyqtSlot(int)
@@ -785,8 +784,9 @@ class ProcessingPage(QtWidgets.QWizardPage):
 
         self._mp4box = MP4Box(config.mp4box)
         self._mp4box.progress.connect(self._update_progress_bar)
-        self._mp4box.message.connect(self._update_text_box)
-        self._mp4box.error.connect(self._update_text_box)
+        self._mp4box.message.connect(self._update_text_box_message)
+        self._mp4box.error.connect(self._update_text_box_error)
+        self._mp4box.done.connect(self._finished)
 
         self._main_layout = QtWidgets.QVBoxLayout()
         self._tree_table_layout = QtWidgets.QHBoxLayout()
@@ -948,19 +948,26 @@ class ProcessingPage(QtWidgets.QWizardPage):
         self._progress_bar.setValue(value)
 
     @QtCore.pyqtSlot(str)
-    def _update_text_box(self, value):
-        if "Error" in value:
-            self._log_view.append("""<b><font color="red">{}""".format(value))
-        else:
-            self._log_view.append("<b>{}</b>".format(value))
+    def _update_text_box_message(self, value):
+        self._log_view.append("<b><font-size=0.5em>{}".format(value))
+
+    @QtCore.pyqtSlot(str)
+    def _update_text_box_error(self, value):
+        self._log_view.append("""<b><font-size=0.8em><font color="red">{}""".format(value))
 
     @QtCore.pyqtSlot()
     def _start_stop_button_clicked(self):
         self._start_stop_button.clicked.disconnect()
         self._start_stop_button.setText("Stop")
         self._start_stop_button.clicked.connect(self._mp4box.exit_thread)
-        #self._mp4box.remux("/Users/Oton/Downloads/The Postman (Unabridged) Part 1.m4a")
-        self._mp4box.remux(r"D:\Downloads\_ab\Aurora CV-01 Frontiers Saga, Book 1 (Unabridged)_done aac100.m4a")
+        self._mp4box.remux("/Users/Oton/Downloads/The Postman (Unabridged) Part 1.m4a")
+        #self._mp4box.remux(r"D:\Downloads\_ab\Aurora CV-01 Frontiers Saga, Book 1 (Unabridged)_done aac100.m4a")
+
+    @QtCore.pyqtSlot()
+    def _finished(self):
+        self._start_stop_button.clicked.disconnect()
+        self._start_stop_button.setText("Done")
+        self._start_stop_button.setDisabled(True)
 
     def initializePage(self):
         self._parse_metadata()

@@ -67,6 +67,7 @@ class Demux(QtCore.QThread):
     error = QtCore.pyqtSignal(str)
     progress = QtCore.pyqtSignal(int)
     status = QtCore.pyqtSignal(str)
+    #finished = QtCore.pyqtSignal()
 
     def __init__(self, bin_path, parent=None):
         super().__init__(parent)
@@ -74,6 +75,16 @@ class Demux(QtCore.QThread):
 
         self._bin_path = bin_path
         self._cmd = []
+        self._job_cache = []
+
+    def _emit_job(self, job):
+        #check if the job has already been emitted:
+        if job in self._job_cache:
+            pass
+        else:
+            #if not emit it and add it to the cache:
+            self.status.emit(job)
+            self._job_cache.append(job)
 
     def demux(self, file, aac_file):
         self._cmd = [self._bin_path, "-raw", "1", file, "-out", aac_file]
@@ -93,21 +104,24 @@ class Demux(QtCore.QThread):
     def run(self):
         debug("running cmd: %s", self._cmd)
 
-        self.status.emit("Media Export")
         for line in self._subproc():
-            debug("demux current line: %s", line)
+            if line:
+                debug("demux current line: %s", line)
 
-            line_slice = line[38:40].strip()
-            if line_slice:
-                try:
-                    self.progress.emit(int(line_slice))
-                except ValueError:
-                    self.error.emit(line)
+                self._emit_job("Media Export")
+
+                line_slice = line[38:40].strip()
+                if line_slice:
+                    try:
+                        self.progress.emit(int(line_slice))
+                    except ValueError:
+                        self.error.emit(line)
+                        break
         else:
             print("OUT!")
             self.progress.emit(100)
-            self.finished.emit()
             self.quit()
+            #self.finished.emit()
 
 
 class Remux(QtCore.QThread):
@@ -115,6 +129,7 @@ class Remux(QtCore.QThread):
     error = QtCore.pyqtSignal(str)
     progress = QtCore.pyqtSignal(int)
     status = QtCore.pyqtSignal(str)
+    #finished = QtCore.pyqtSignal()
 
     def __init__(self, bin_path, parent=None):
         super().__init__(parent)
@@ -154,44 +169,44 @@ class Remux(QtCore.QThread):
         debug("running cmd: %s", self._cmd)
 
         for line in self._subproc():
-            debug("remux current line: %s", line)
+            if line:
+                debug("remux current line: %s", line)
 
-            #first operation:
-            if "Importing AAC" in line:
-                #emit the current job:
-                self._emit_job("Importing AAC")
+                #first operation:
+                if "Importing AAC" in line:
+                    #emit the current job:
+                    self._emit_job("Importing AAC")
 
-                line_slice = line[39:41].strip()
-                if line_slice:
-                    try:
-                        self.progress.emit(int(line_slice))
-                    except ValueError:
-                        self.error.emit(line)
+                    line_slice = line[39:41].strip()
+                    if line_slice:
+                        try:
+                            self.progress.emit(int(line_slice))
+                        except ValueError:
+                            self.error.emit(line)
+                            break
 
-            #second operation:
-            elif "ISO File Writing" in line:
-                self._emit_job("ISO File Writing")
+                #second operation:
+                elif "ISO File Writing" in line:
+                    self._emit_job("ISO File Writing")
 
-                line_slice = line[42:44].strip()
-                if line_slice:
-                    try:
-                        self.progress.emit(int(line_slice))
-                    except ValueError:
-                        self.error.emit(line)
-            else:
-                continue
+                    line_slice = line[42:44].strip()
+                    if line_slice:
+                        try:
+                            self.progress.emit(int(line_slice))
+                        except ValueError:
+                            self.error.emit(line)
+                            break
         else:
             print("OUT!")
             self.progress.emit(100)
-            self.finished.emit()
             self.quit()
+            #self.finished.emit()
 
 
 class MP4Box(QtCore.QObject):
-    retcode = QtCore.pyqtSignal(int)
     error = QtCore.pyqtSignal(str)
     progress = QtCore.pyqtSignal(int)
-    finished = QtCore.pyqtSignal()
+    done = QtCore.pyqtSignal()
     message = QtCore.pyqtSignal(str)
 
     def __init__(self, bin_path):
@@ -207,11 +222,12 @@ class MP4Box(QtCore.QObject):
         self._aac_file = ""
         self._m4b_file = ""
         self._position = 0
-        self._returncode = 0
         self._error_msg = ""
         self._status = ""
         self._part_no = 0
         self._current_job = None
+
+        self.called = 0
 
         self._test = Test(self._bin_path)
         self._test.retcode.connect(self._recieve_retcode)
@@ -220,7 +236,6 @@ class MP4Box(QtCore.QObject):
         #setup demux thread:
         self._demux = Demux(self._bin_path)
         #recieve and process returncode, error and status messages:
-        self._demux.retcode.connect(self._recieve_retcode)
         self._demux.error.connect(self._recieve_error)
         self._demux.status.connect(self._recieve_status)
         #passthrough progress status:
@@ -231,7 +246,6 @@ class MP4Box(QtCore.QObject):
         #setup remux thread:
         self._remux = Remux(self._bin_path)
         #recieve and process returncode, error and status messages:
-        self._remux.retcode.connect(self._recieve_retcode)
         self._remux.error.connect(self._recieve_error)
         self._remux.status.connect(self._recieve_status)
         #passthrough progress status:
@@ -279,20 +293,15 @@ class MP4Box(QtCore.QObject):
     def _recieve_error(self, msg):
         #recieve and process error messages:
         debug("got error signal: %s", msg)
+        self._demux.finished.disconnect(self._launch_remux_thread)
         self.error.emit("Error: {}".format(msg))
-
-        #disconnect all signals and delete objects:
-        self._demux.disconnect()
-        del self._demux
-
-        self._remux.disconnect()
-        del self._remux
+        self.exit_thread()
 
     @QtCore.pyqtSlot(str)
     def _recieve_status(self, msg):
         #recieve and store status messages:
         debug("got status signal: %s", msg)
-        self.message.emit(msg)
+        self.message.emit("Thread reports: {}".format(msg))
 
     @QtCore.pyqtSlot(int)
     def _emit_progress(self, progress):
@@ -303,7 +312,7 @@ class MP4Box(QtCore.QObject):
     def exit_thread(self):
         #when the signal is recieved launch the function
         #that stops the current_job thread:
-        self._current_job.quit()
+        self._current_job.terminate()
 
         #disconnect all signals and delete objects:
         self._demux.disconnect()
@@ -314,9 +323,8 @@ class MP4Box(QtCore.QObject):
 
         #emit all finalizing messages:
         self.progress.emit(100)
-        self.message.emit("Interrupted")
-        self.retcode.emit(0)
-        self.finished.emit()
+        self.error.emit("Interrupted")
+        self.done.emit()
 
 ##############################################################
 #################        FLOW         ########################
@@ -352,7 +360,6 @@ class MP4Box(QtCore.QObject):
         self.message.emit("Remuxing to file: {}".format(self._m4b_file))
 
         self._remux.remux(self._aac_file, self._m4b_file, self._part_no)
-
         #set current job to point to the current thread:
         self._current_job = self._remux
 
@@ -362,7 +369,7 @@ class MP4Box(QtCore.QObject):
         #perform the final cleanups and emit the main
         #finished signal for this module:
         self.message.emit("Created file: {}".format(self._m4b_file))
-
         self.delete(self._aac_file)
 
-        self.finished.emit()
+        self.message.emit("Done!")
+        self.done.emit()
