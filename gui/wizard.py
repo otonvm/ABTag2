@@ -956,10 +956,11 @@ class ProcessingPage(QtWidgets.QWizardPage):
 
     @QtCore.pyqtSlot()
     def _start_stop_button_clicked(self):
+        self._start_stop_button.clicked.disconnect()
         self._start_stop_button.setText("Stop")
         self._start_stop_button.clicked.connect(self._mp4box.exit_thread)
-        self._mp4box.remux("/Users/Oton/Downloads/The Postman (Unabridged) Part 1.m4a")
-        #self._mp4box.remux(r"D:\Downloads\_ab\Aurora CV-01 Frontiers Saga, Book 1 (Unabridged)_done aac100.m4a")
+        #self._mp4box.remux("/Users/Oton/Downloads/The Postman (Unabridged) Part 1.m4a")
+        self._mp4box.remux(r"D:\Downloads\_ab\Aurora CV-01 Frontiers Saga, Book 1 (Unabridged)_done aac100.m4a")
 
     def initializePage(self):
         self._parse_metadata()

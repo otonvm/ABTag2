@@ -72,8 +72,6 @@ class Demux(QtCore.QThread):
         super().__init__(parent)
         debug("initialized Demux")
 
-        self._proc = None
-        self._poll = None
         self._bin_path = bin_path
         self._cmd = []
 
@@ -84,15 +82,10 @@ class Demux(QtCore.QThread):
 
         self.start()
 
-    def exit_thread(self):
-        if self._poll is not None:
-            self._proc.kill()
-        #MP4Box.delete(aac_file)
-
     def _subproc(self):
         try:
-            self._proc = subprocess.Popen(self._cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=1)
-            for line in io.open(self._proc.stderr.fileno()):
+            proc = subprocess.Popen(self._cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=1)
+            for line in io.open(proc.stderr.fileno()):
                 yield line.strip()
         except subprocess.SubprocessError as err:
             self.error.emit(err)
@@ -100,36 +93,21 @@ class Demux(QtCore.QThread):
     def run(self):
         debug("running cmd: %s", self._cmd)
 
-        stderr_line = ""
-
         self.status.emit("Media Export")
-        while self._poll is None:
-            for line in self._subproc():
-                #store line in case needed:
-                stderr_line = line
-                debug("demux current line: %s", line)
+        for line in self._subproc():
+            debug("demux current line: %s", line)
 
-                line_slice = line[38:40].strip()
-                if line_slice:
+            line_slice = line[38:40].strip()
+            if line_slice:
+                try:
                     self.progress.emit(int(line_slice))
-
-                #check if process still exists:
-                self._poll = self._proc.poll()
-        #process ended:
+                except ValueError:
+                    self.error.emit(line)
         else:
-            #emit returncode
-            self.retcode.emit(self._poll)
-            debug("demux returncode: %s", self._poll)
-
-            #if there was an error we emit the last line:
-            if self._poll != 0:
-                self.error.emit(stderr_line)
-                debug("demux last line: %s", stderr_line)
-            else:
-                #or the finished signal:
-                self.finished.emit()
-                self._proc = None
-                self._poll = None
+            print("OUT!")
+            self.progress.emit(100)
+            self.finished.emit()
+            self.quit()
 
 
 class Remux(QtCore.QThread):
@@ -142,10 +120,9 @@ class Remux(QtCore.QThread):
         super().__init__(parent)
         debug("initialized Demux")
 
-        self._proc = None
-        self._poll = None
         self._job_cache = []
         self._bin_path = bin_path
+        self._m4b_file = ""
         self._cmd = []
 
     def remux(self, aac_file, m4b_file, part_no):
@@ -155,10 +132,6 @@ class Remux(QtCore.QThread):
         MP4Box.delete(m4b_file)
 
         self.start()
-
-    def exit_thread(self):
-        if self._poll is not None:
-            self._proc.kill()
 
     def _emit_job(self, job):
         #check if the job has already been emitted:
@@ -171,8 +144,8 @@ class Remux(QtCore.QThread):
 
     def _subproc(self):
         try:
-            self._proc = subprocess.Popen(self._cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=1)
-            for line in io.open(self._proc.stderr.fileno()):
+            proc = subprocess.Popen(self._cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=1)
+            for line in io.open(proc.stderr.fileno()):
                 yield line.strip()
         except subprocess.SubprocessError as err:
             self.error.emit(err)
@@ -180,49 +153,38 @@ class Remux(QtCore.QThread):
     def run(self):
         debug("running cmd: %s", self._cmd)
 
-        stderr_line = ""
+        for line in self._subproc():
+            debug("remux current line: %s", line)
 
-        #if the process is running:
-        while self._poll is None:
-            for line in self._subproc():
-                #store the line if needed
-                stderr_line = line
-                debug("remux current line: %s", line)
+            #first operation:
+            if "Importing AAC" in line:
+                #emit the current job:
+                self._emit_job("Importing AAC")
 
-                #first operation:
-                if "Importing AAC" in line:
-                    #emit the current job:
-                    self._emit_job("Importing AAC")
-
-                    line_slice = line[39:41].strip()
-                    if line_slice:
+                line_slice = line[39:41].strip()
+                if line_slice:
+                    try:
                         self.progress.emit(int(line_slice))
+                    except ValueError:
+                        self.error.emit(line)
 
-                #second operation:
-                elif "ISO File Writing" in line:
-                    self._emit_job("ISO File Writing")
+            #second operation:
+            elif "ISO File Writing" in line:
+                self._emit_job("ISO File Writing")
 
-                    line_slice = line[42:44].strip()
-                    if line_slice:
+                line_slice = line[42:44].strip()
+                if line_slice:
+                    try:
                         self.progress.emit(int(line_slice))
-
-                #check if process still exists:
-                self._poll = self._proc.poll()
-        #process ended:
-        else:
-            #emit returncode
-            self.retcode.emit(self._poll)
-            debug("remux returncode: %s", self._poll)
-
-            #emit the last line if there was an error:
-            if self._poll != 0:
-                self.error.emit(stderr_line)
-                debug("remux last line: %s", stderr_line)
+                    except ValueError:
+                        self.error.emit(line)
             else:
-                #or the finished signal:
-                self.finished.emit()
-                self._proc = None
-                self._poll = None
+                continue
+        else:
+            print("OUT!")
+            self.progress.emit(100)
+            self.finished.emit()
+            self.quit()
 
 
 class MP4Box(QtCore.QObject):
@@ -319,6 +281,13 @@ class MP4Box(QtCore.QObject):
         debug("got error signal: %s", msg)
         self.error.emit("Error: {}".format(msg))
 
+        #disconnect all signals and delete objects:
+        self._demux.disconnect()
+        del self._demux
+
+        self._remux.disconnect()
+        del self._remux
+
     @QtCore.pyqtSlot(str)
     def _recieve_status(self, msg):
         #recieve and store status messages:
@@ -328,16 +297,26 @@ class MP4Box(QtCore.QObject):
     @QtCore.pyqtSlot(int)
     def _emit_progress(self, progress):
         #passthrough progress status:
-        debug("got progress signal: %s", progress)
         self.progress.emit(progress)
 
     @QtCore.pyqtSlot()
     def exit_thread(self):
         #when the signal is recieved launch the function
         #that stops the current_job thread:
-        #if hasattr(self._current_job, "exit_thread"):
-        #    self._current_job.exit_thread()
-        self._current_job.terminate()
+        self._current_job.quit()
+
+        #disconnect all signals and delete objects:
+        self._demux.disconnect()
+        del self._demux
+
+        self._remux.disconnect()
+        del self._remux
+
+        #emit all finalizing messages:
+        self.progress.emit(100)
+        self.message.emit("Interrupted")
+        self.retcode.emit(0)
+        self.finished.emit()
 
 ##############################################################
 #################        FLOW         ########################
