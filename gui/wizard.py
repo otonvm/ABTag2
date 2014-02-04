@@ -11,6 +11,7 @@ from config import Config
 from lib.tree import Parse
 from lib.abparse import Metadata
 from lib.mux import MP4Box
+from lib.tag import Tag
 from gui.resources import Icons
 
 DEBUG = True
@@ -788,6 +789,12 @@ class ProcessingPage(QtWidgets.QWizardPage):
         self._mp4box.error.connect(self._update_text_box_error)
         self._mp4box.done.connect(self._remuxing_finished)
 
+        self._tagger = Tag(config.mp4box)
+        self._tagger.progress.connect(self._update_progress_bar)
+        self._tagger.message.connect(self._update_text_box_message)
+        self._tagger.error.connect(self._update_text_box_error)
+        self._tagger.finished.connect(self._finished)
+
         self._main_layout = QtWidgets.QVBoxLayout()
         self._tree_table_layout = QtWidgets.QHBoxLayout()
         self._progress_layout = QtWidgets.QHBoxLayout()
@@ -980,8 +987,9 @@ class ProcessingPage(QtWidgets.QWizardPage):
         self._start_tagging()
 
     def _start_tagging(self):
-
-
+        for entry in self._database.keys():
+            file = self._database[entry]
+            self._tagger.tag(file)
 
     @QtCore.pyqtSlot()
     def _finished(self):

@@ -141,6 +141,13 @@ class Tag(QtCore.QObject):
         self._test_thread = None
         self._tag_thread = None
 
+    @staticmethod
+    def delete(file):
+        try:
+            os.remove(file)
+        except OSError:
+            pass
+
     def test(self):
         if self._tested:
             return
@@ -165,6 +172,25 @@ class Tag(QtCore.QObject):
         else:
             self.error.emit(signal)
 
+    @QtCore.pyqtSlot(int)
+    def _emit_progress(self, progress):
+        #passthrough progress status:
+        self.progress.emit(progress)
+
+    @QtCore.pyqtSlot(str)
+    def _recieve_status(self, msg):
+        #recieve and store status messages:
+        debug("got status signal: %s", msg)
+        self.message.emit("Thread reports: {}".format(msg))
+
+    @QtCore.pyqtSlot(str)
+    def _recieve_error(self, msg):
+        #recieve and process error messages:
+        debug("got error signal: %s", msg)
+        self._demux.finished.disconnect(self._launch_remux_thread)
+        self.error.emit("Error: {}".format(msg))
+        self.exit_thread()
+
     @QtCore.pyqtSlot()
     def exit_thread(self):
         #when the signal is recieved launch the function
@@ -180,11 +206,20 @@ class Tag(QtCore.QObject):
         self.finished.emit()
 
     def _start_tagging(self):
+        self.delete(self._m4b_file)
+
         self._tag_thread = Tagger(self._bin_path)
-        self._tag_thread.finished.connect()
-        self._tag_thread.progress.connect()
-        self._tag_thread.status.connect()
-        self._tag_thread.error.connect()
+        self._tag_thread.finished.connect(self._finish_cleanup)
+        self._tag_thread.progress.connect(self._emit_progress)
+        self._tag_thread.status.connect(self._recieve_status)
+        self._tag_thread.error.connect(self._recieve_error)
+
+    @QtCore.pyqtSlot()
+    def _finish_cleanup(self):
+        self.delete(self._m4b_temp_file)
+        self._tag_thread.disconnect()
+        self.message.emit("Done!")
+        self.finished.emit()
 
     def tag(self, data):
         if not isinstance(data, dict):
@@ -263,3 +298,5 @@ class Tag(QtCore.QObject):
         self._cmd.append(self._m4b_file)
 
         debug("complete _cmd for tagging: %s", self._cmd)
+
+        self._start_tagging()

@@ -129,7 +129,7 @@ if __name__ == "__main__":
     import platform
 
     if platform.system() == "Darwin":
-        sys.argv.append("test_ab")
+        sys.argv.append("/Users/Oton/Downloads/The Postman")
         sys.argv.append("http://www.audible.com/pd/Sci-Fi-Fantasy/On-Basilisk-Station-Audiobook/B002V1BOWY/ref=a_search_c4_1_1_srTtl?qid=1391030110&sr=1-1")
         #sys.argv.append("test_ab")
         pass
