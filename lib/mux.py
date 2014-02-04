@@ -5,10 +5,8 @@ import io
 import stat
 import logging
 import subprocess
-import platform
 
 from PyQt5 import QtCore
-from PyQt5 import QtWidgets
 
 from lib.tree import Tools
 
@@ -67,7 +65,6 @@ class Demux(QtCore.QThread):
     error = QtCore.pyqtSignal(str)
     progress = QtCore.pyqtSignal(int)
     status = QtCore.pyqtSignal(str)
-    #finished = QtCore.pyqtSignal()
 
     def __init__(self, bin_path, parent=None):
         super().__init__(parent)
@@ -118,10 +115,8 @@ class Demux(QtCore.QThread):
                         self.error.emit(line)
                         break
         else:
-            print("OUT!")
             self.progress.emit(100)
             self.quit()
-            #self.finished.emit()
 
 
 class Remux(QtCore.QThread):
@@ -331,7 +326,7 @@ class MP4Box(QtCore.QObject):
 ##############################################################
     def remux(self, file, part_no=1):
         if not isinstance(part_no, int):
-            raise TypeError("part_no must be of type int")
+            raise ValueError("part_no must be of type int")
         else:
             self._part_no = part_no
 

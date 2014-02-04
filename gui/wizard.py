@@ -786,7 +786,7 @@ class ProcessingPage(QtWidgets.QWizardPage):
         self._mp4box.progress.connect(self._update_progress_bar)
         self._mp4box.message.connect(self._update_text_box_message)
         self._mp4box.error.connect(self._update_text_box_error)
-        self._mp4box.done.connect(self._finished)
+        self._mp4box.done.connect(self._remuxing_finished)
 
         self._main_layout = QtWidgets.QVBoxLayout()
         self._tree_table_layout = QtWidgets.QHBoxLayout()
@@ -923,6 +923,8 @@ class ProcessingPage(QtWidgets.QWizardPage):
 
             audio_file_data["title"] = self.config.title_full(current_track_no)
 
+            audio_file_data["sort title"] = self.config.title_sort
+
             artist_string = "{} (read by {})".format(self.config.authors_string,
                                                      self.config.narrators_string)
             audio_file_data["artist"] = artist_string
@@ -937,6 +939,8 @@ class ProcessingPage(QtWidgets.QWizardPage):
             audio_file_data["description"] = self.config.description
 
             audio_file_data["copyright"] = self.config.copyright
+
+            audio_file_data["date"] = self.config.date
 
             debug("audio_file_data: %s", audio_file_data)
 
@@ -960,8 +964,24 @@ class ProcessingPage(QtWidgets.QWizardPage):
         self._start_stop_button.clicked.disconnect()
         self._start_stop_button.setText("Stop")
         self._start_stop_button.clicked.connect(self._mp4box.exit_thread)
-        self._mp4box.remux("/Users/Oton/Downloads/The Postman (Unabridged) Part 1.m4a")
-        #self._mp4box.remux(r"D:\Downloads\_ab\Aurora CV-01 Frontiers Saga, Book 1 (Unabridged)_done aac100.m4a")
+
+        self._start_remuxing()
+
+    def _start_remuxing(self):
+        for entry in self._database.keys():
+            file = self._database[entry]
+            self._mp4box.remux(file["file"], file["track no"])
+
+    @QtCore.pyqtSlot()
+    def _remuxing_finished(self):
+        self._start_stop_button.clicked.disconnect()
+        self._mp4box.disconnect()
+
+        self._start_tagging()
+
+    def _start_tagging(self):
+
+
 
     @QtCore.pyqtSlot()
     def _finished(self):
