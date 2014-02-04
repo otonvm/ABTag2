@@ -10,7 +10,7 @@ from PyQt5 import QtCore
 from config import Config
 from lib.tree import Parse
 from lib.abparse import Metadata
-from lib.mux import MP4Box
+from lib.mux import Muxer
 from lib.tag import Tag
 from gui.resources import Icons
 
@@ -783,17 +783,23 @@ class ProcessingPage(QtWidgets.QWizardPage):
         self.setTitle("Processing")
         self.setSubTitle("Review the data that will be used for tagging each file. When ready click Start.")
 
-        self._mp4box = MP4Box(config.mp4box)
+        #create an instance of mp4box and atomicparsley controllers and threads
+        #connect progress. message and error signals to functions that update
+        #gui elements and widgets
+        self._mp4box = Muxer(config.mp4box)
         self._mp4box.progress.connect(self._update_progress_bar)
         self._mp4box.message.connect(self._update_text_box_message)
         self._mp4box.error.connect(self._update_text_box_error)
-        self._mp4box.done.connect(self._remuxing_finished)
 
-        self._tagger = Tag(config.mp4box)
+        self._tagger = Tag(config.atomicparsley)
         self._tagger.progress.connect(self._update_progress_bar)
         self._tagger.message.connect(self._update_text_box_message)
         self._tagger.error.connect(self._update_text_box_error)
-        self._tagger.finished.connect(self._finished)
+
+        #create an instance of the controller class that manages calling mp4box and atomicparsley
+        #threads and emits only one signal when it's finished
+        self._controller = Controller(self._mp4box, self._tagger)
+        self._controller.finished.connect(self._finished)
 
         self._main_layout = QtWidgets.QVBoxLayout()
         self._tree_table_layout = QtWidgets.QHBoxLayout()
@@ -972,32 +978,50 @@ class ProcessingPage(QtWidgets.QWizardPage):
         self._start_stop_button.setText("Stop")
         self._start_stop_button.clicked.connect(self._mp4box.exit_thread)
 
-        self._start_remuxing()
+        self._start_processing()
 
-    def _start_remuxing(self):
+    def _start_processing(self):
         for entry in self._database.keys():
-            file = self._database[entry]
-            self._mp4box.remux(file["file"], file["track no"])
-
-    @QtCore.pyqtSlot()
-    def _remuxing_finished(self):
-        self._start_stop_button.clicked.disconnect()
-        self._mp4box.disconnect()
-
-        self._start_tagging()
-
-    def _start_tagging(self):
-        for entry in self._database.keys():
-            file = self._database[entry]
-            self._tagger.tag(file)
+            file_data = self._database[entry]
+            self._controller.process_file(file_data)
 
     @QtCore.pyqtSlot()
     def _finished(self):
         self._start_stop_button.clicked.disconnect()
         self._start_stop_button.setText("Done")
-        self._start_stop_button.setDisabled(True)
+        self._start_stop_button.setDisabled("True")
+        self._update_text_box_message("Finished!")
 
     def initializePage(self):
         self._parse_metadata()
         self._setup_layout()
         self._setup_widgets()
+
+
+class Controller(QtCore.QObject):
+    finished = QtCore.pyqtSignal()
+
+    def __init__(self, mp4box_instance, ap_instance, parent=None):
+        super().__init__(parent)
+        debug("initialized Controller")
+
+        self._mp4box = mp4box_instance
+        self._mp4box.finished.connect(self._tag_file)
+
+        self._tagger = ap_instance
+        self._tagger.finished.connect(self._finished)
+
+        self._data = {}
+
+    def process_file(self, data):
+        self._data = data
+
+        self._mp4box.remux(self._data["file"], self._data["track no"])
+
+    @QtCore.pyqtSlot()
+    def _tag_file(self):
+        self._tagger.tag(self._data)
+
+    @QtCore.pyqtSlot()
+    def _finished(self):
+        debug("Finished processing files")

@@ -86,7 +86,7 @@ class Demux(QtCore.QThread):
     def demux(self, file, aac_file):
         self._cmd = [self._bin_path, "-raw", "1", file, "-out", aac_file]
 
-        MP4Box.delete(aac_file)
+        Muxer.delete(aac_file)
 
         self.start()
 
@@ -139,7 +139,7 @@ class Remux(QtCore.QThread):
         self._cmd = [self._bin_path, "-brand", "M4B ", "-ab", "mp71", "-ipod", "-add",
                      "{}:name=Part {}:lang=eng".format(aac_file, part_no), m4b_file]
 
-        MP4Box.delete(m4b_file)
+        Muxer.delete(m4b_file)
 
         self.start()
 
@@ -198,10 +198,10 @@ class Remux(QtCore.QThread):
             #self.finished.emit()
 
 
-class MP4Box(QtCore.QObject):
+class Muxer(QtCore.QObject):
     error = QtCore.pyqtSignal(str)
     progress = QtCore.pyqtSignal(int)
-    done = QtCore.pyqtSignal()
+    finished = QtCore.pyqtSignal()
     message = QtCore.pyqtSignal(str)
 
     def __init__(self, bin_path):
@@ -319,7 +319,7 @@ class MP4Box(QtCore.QObject):
         #emit all finalizing messages:
         self.progress.emit(100)
         self.error.emit("Interrupted")
-        self.done.emit()
+        self.finished.emit()
 
 ##############################################################
 #################        FLOW         ########################
@@ -367,4 +367,4 @@ class MP4Box(QtCore.QObject):
         self.delete(self._aac_file)
 
         self.message.emit("Done!")
-        self.done.emit()
+        self.finished.emit()

@@ -138,9 +138,8 @@ if __name__ == "__main__":
         #sys.argv.append(r"D:\Downloads\AAC Audiobooks")
         #sys.argv.append("--cover")
         #sys.argv.append(r"D:\Downloads\ImmPoster.jpg")
-        sys.argv.append("test_ab")
+        sys.argv.append(r"D:\Downloads\_ab\test")
         sys.argv.append("http://www.audible.com/pd/Sci-Fi-Fantasy/On-Basilisk-Station-Audiobook/B002V1BOWY")
-
         pass
 
     sys.exit(main())
