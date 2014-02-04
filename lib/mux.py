@@ -248,6 +248,19 @@ class Muxer(QtCore.QObject):
         #control flow:
         self._remux.finished.connect(self._finish_cleanup)
 
+    def reset(self):
+        self._signal = 0
+        self._cmd = []
+        self._file_path = ""
+        self._file_name = ""
+        self._aac_file = ""
+        self._m4b_file = ""
+        self._position = 0
+        self._error_msg = ""
+        self._status = ""
+        self._part_no = 0
+        self._current_job = None
+
     @staticmethod
     def delete(file):
         try:

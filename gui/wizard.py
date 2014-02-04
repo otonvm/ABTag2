@@ -812,7 +812,8 @@ class ProcessingPage(QtWidgets.QWizardPage):
         self._progress_bar = QtWidgets.QProgressBar()
         self._start_stop_button = QtWidgets.QPushButton()
 
-        self._database = None
+        self._database = {}
+        self._file_queue = []
 
     def _setup_widgets(self):
         self._log_view.setMaximumHeight(100)
@@ -960,6 +961,10 @@ class ProcessingPage(QtWidgets.QWizardPage):
             self._database.update({audio_file: audio_file_data})
         return
 
+    def _create_queue(self):
+        for item in self._database.keys():
+            self._file_queue.append(self._database[item])
+
     @QtCore.pyqtSlot(int)
     def _update_progress_bar(self, value):
         self._progress_bar.setValue(value)
@@ -978,22 +983,28 @@ class ProcessingPage(QtWidgets.QWizardPage):
         self._start_stop_button.setText("Stop")
         self._start_stop_button.clicked.connect(self._mp4box.exit_thread)
 
-        self._start_processing()
+        self._loop()
 
-    def _start_processing(self):
-        for entry in self._database.keys():
-            file_data = self._database[entry]
-            self._controller.process_file(file_data)
+    def _loop(self):
+        if len(self._file_queue) > 0:
+            file = self._file_queue.pop(0)
+            self._controller.process_file(file)
+        else:
+            self._finished()
 
     @QtCore.pyqtSlot()
     def _finished(self):
-        self._start_stop_button.clicked.disconnect()
-        self._start_stop_button.setText("Done")
-        self._start_stop_button.setDisabled("True")
-        self._update_text_box_message("Finished!")
+        if len(self._file_queue) == 0:
+            self._start_stop_button.clicked.disconnect()
+            self._start_stop_button.setText("Done")
+            self._start_stop_button.setDisabled(True)
+            self._update_text_box_message("Finished!")
+        else:
+            self._loop()
 
     def initializePage(self):
         self._parse_metadata()
+        self._create_queue()
         self._setup_layout()
         self._setup_widgets()
 
@@ -1016,12 +1027,17 @@ class Controller(QtCore.QObject):
     def process_file(self, data):
         self._data = data
 
+        debug("processing file: %s", self._data["file"])
+
+        self._mp4box.reset()
         self._mp4box.remux(self._data["file"], self._data["track no"])
 
     @QtCore.pyqtSlot()
     def _tag_file(self):
+        self._tagger.reset()
         self._tagger.tag(self._data)
 
     @QtCore.pyqtSlot()
     def _finished(self):
         debug("Finished processing files")
+        self.finished.emit()

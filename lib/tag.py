@@ -66,6 +66,7 @@ class Tagger(QtCore.QThread):
     progress = QtCore.pyqtSignal(int)
     status = QtCore.pyqtSignal(str)
     error = QtCore.pyqtSignal(str)
+    returncode = QtCore.pyqtSignal(int)
 
     def __init__(self, bin_path, parent=None):
         super().__init__(parent)
@@ -74,6 +75,7 @@ class Tagger(QtCore.QThread):
         self._bin_path = bin_path
         self._cmd = []
         self._job_cache = []
+        self._returncode = 0
 
     def tag(self, cmd):
         if not isinstance(cmd, list):
@@ -85,38 +87,41 @@ class Tagger(QtCore.QThread):
 
         self.start()
 
-    def _emit_job(self, job):
-        #check if the job has already been emitted:
-        if job in self._job_cache:
-            pass
-        else:
-            #if not emit it and add it to the cache:
-            self.status.emit(job)
-            self._job_cache.append(job)
-
     def _subproc(self):
         try:
             with subprocess.Popen(self._cmd, stdout=subprocess.PIPE,
                                   stderr=subprocess.PIPE, bufsize=1) as proc:
-                for line in io.open(proc.stdout.fileno()):
-                    yield line.strip()
+                with io.open(proc.stdout.fileno()) as stdout:
+                    for line in stdout:
+                        yield line.strip()
+                    else:
+                        self._returncode = proc.poll()
+                        self.returncode.emit(self._returncode)
+
         except subprocess.SubprocessError as err:
             self.error.emit(err)
+        except OSError:
+            pass
 
     def run(self):
         debug("started thread Tag")
 
+        last_line = ""
         for line in self._subproc():
             debug("current line: %s", line)
+            last_line = line
 
-            self._emit_job("Tagging")
-
-            match = re.search(r"\s(\d+)%\s", line).group(1)
-            self.progress.emit(int(match))
+            try:
+                match = re.search(r"\s(\d+)%\s", line).group(1)
+                self.progress.emit(int(match))
+            except AttributeError:
+                pass
 
         else:
             self.progress.emit(100)
-            self.status.emit("done")
+            if self._returncode != 0:
+                self.status.emit(last_line)
+
             self.quit()
 
 
@@ -125,6 +130,7 @@ class Tag(QtCore.QObject):
     progress = QtCore.pyqtSignal(int)
     finished = QtCore.pyqtSignal()
     message = QtCore.pyqtSignal(str)
+    returncode = QtCore.pyqtSignal(int)
 
     def __init__(self, bin_path, parent=None):
         super().__init__(parent)
@@ -132,6 +138,16 @@ class Tag(QtCore.QObject):
         self._bin_path = bin_path
         self._tested = False
 
+        self._file_path = ""
+        self._file_name = ""
+        self._m4b_temp_file = ""
+        self._m4b_file = ""
+        self._cmd = []
+
+        self._test_thread = None
+        self._tag_thread = None
+
+    def reset(self):
         self._file_path = ""
         self._file_name = ""
         self._m4b_temp_file = ""
@@ -175,6 +191,7 @@ class Tag(QtCore.QObject):
     @QtCore.pyqtSlot(int)
     def _emit_progress(self, progress):
         #passthrough progress status:
+        debug("got progress signal: %s", progress)
         self.progress.emit(progress)
 
     @QtCore.pyqtSlot(str)
@@ -190,6 +207,11 @@ class Tag(QtCore.QObject):
         self._demux.finished.disconnect(self._launch_remux_thread)
         self.error.emit("Error: {}".format(msg))
         self.exit_thread()
+
+    @QtCore.pyqtSlot(int)
+    def _recieve_returncode(self, code):
+        debug("got returncode signal: %s", code)
+        self.returncode.emit(code)
 
     @QtCore.pyqtSlot()
     def exit_thread(self):
@@ -213,12 +235,15 @@ class Tag(QtCore.QObject):
         self._tag_thread.progress.connect(self._emit_progress)
         self._tag_thread.status.connect(self._recieve_status)
         self._tag_thread.error.connect(self._recieve_error)
+        self._tag_thread.returncode.connect(self._recieve_returncode)
+
+        self._tag_thread.tag(self._cmd)
 
     @QtCore.pyqtSlot()
     def _finish_cleanup(self):
         self.delete(self._m4b_temp_file)
         self._tag_thread.disconnect()
-        self.message.emit("Done!")
+        self.message.emit("Finished tagging file...")
         self.finished.emit()
 
     def tag(self, data):
@@ -242,7 +267,7 @@ class Tag(QtCore.QObject):
         self._cmd.append(data["album artist"])
 
         self._cmd.append("--title")
-        self._cmd.append("title")
+        self._cmd.append(data["title"])
 
         self._cmd.append("--sortOrder")
         self._cmd.append("name")
@@ -255,7 +280,7 @@ class Tag(QtCore.QObject):
         self._cmd.append("{}/{}".format(data["track no"], data["tot tracks"]))
 
         self._cmd.append("--disk")
-        self._cmd.append(data["disk no"])
+        self._cmd.append(str(data["disk no"]))
 
         self._cmd.append("--year")
         self._cmd.append(data["date"])
@@ -272,9 +297,13 @@ class Tag(QtCore.QObject):
         self._cmd.append("--storedesc")
         self._cmd.append(data["description"])
 
-        if data["cover"]:
-            self._cmd.append("--artwork")
-            self._cmd.append(data["cover"])
+        try:
+            cover = data["cover"]
+            if cover is not None:
+                self._cmd.append("--artwork")
+                self._cmd.append(cover)
+        except KeyError:
+            pass
 
         self._cmd.append("--genre")
         self._cmd.append("Audiobooks")
