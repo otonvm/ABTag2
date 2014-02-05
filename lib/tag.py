@@ -3,13 +3,10 @@
 import os
 import io
 import re
-import stat
 import logging
 import subprocess
 
 from PyQt5 import QtCore
-
-from lib.tree import Tools
 
 DEBUG = True
 
@@ -119,7 +116,7 @@ class Tagger(QtCore.QThread):
 
         else:
             self.progress.emit(100)
-            if self._returncode != 0:
+            if self._returncode != 0 and self._returncode is not None:
                 self.status.emit(last_line)
 
             self.quit()
